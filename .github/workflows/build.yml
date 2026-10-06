@@ -23,7 +23,33 @@ jobs:
       - name: Rodar build.sh
         run: bash web/build.sh
 
-      - name: Upload dos arquivos gerados
+      - name: Diagnóstico — listar tudo que foi gerado
+        if: always()
+        run: |
+          echo "===== build/ ====="
+          ls -la build/ || true
+          echo "===== web/public/ ====="
+          ls -la web/public/ || true
+          echo "===== web/ ====="
+          ls -la web/ || true
+
+      - name: Upload do build/ completo
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-folder
+          path: build/
+          if-no-files-found: warn
+
+      - name: Upload do web/public/ completo
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-public-folder
+          path: web/public/
+          if-no-files-found: warn
+
+      - name: Upload dos artefatos finais
         uses: actions/upload-artifact@v4
         with:
           name: luau-lsp-wasm
