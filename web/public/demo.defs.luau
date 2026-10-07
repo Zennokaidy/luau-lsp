@@ -1,12 +1,9 @@
 -- PixelForge Studio — Luau API definitions for luau-lsp
--- Covers: screen, keyboard, mouse, touch, gamepad, system, storage, audio,
--- asset_manager, gfx3d, PForgeImage/Sprite/Map/Sound, registries,
--- lifecycle hooks, threading helpers, math helpers and the multiplayer API.
 
 -- ============================================================
--- screen — 2D drawing (origin at center, 1 unit = 100px)
+-- TIPOS BASE
 -- ============================================================
-declare screen: {
+type Screen = {
     width: number,
     height: number,
     clear: (color: string?) -> (),
@@ -30,228 +27,241 @@ declare screen: {
     drawRoundRect: (x: number, y: number, w: number, h: number, r: number, color: string?) -> (),
     fillRound: (x: number, y: number, w: number, h: number, color: string?) -> (),
     drawRound: (x: number, y: number, w: number, h: number, color: string?) -> (),
-    drawSprite: (name: string, x: number, y: number, w: number, h: number?) -> (),
-    drawText: (text: string, x: number, y: number, size: number, color: string?) -> (),
-    textWidth: (text: string, size: number) -> number,
     drawLine: (x1: number, y1: number, x2: number, y2: number) -> (),
+    drawArc: (x: number, y: number, r: number, a1: number, a2: number, ccw: boolean, color: string?) -> (),
+    fillArc: (x: number, y: number, r: number, a1: number, a2: number, ccw: boolean, color: string?) -> (),
+    drawPolygon: (...number) -> (),
+    drawPolyline: (...number) -> (),
+    fillPolygon: (...number) -> (),
+    drawText: (text: string, x: number, y: number, size: number, color: string?) -> (),
+    drawTextOutline: (text: string, x: number, y: number, size: number, color: string?) -> (),
+    textWidth: (text: string, size: number) -> number,
+    setLinearGradient: (x1: number, y1: number, x2: number, y2: number, c1: string, c2: string) -> (),
+    setRadialGradient: (x: number, y: number, radius: number, c1: string, c2: string) -> (),
+    drawSprite: (name: string, x: number, y: number, w: number, h: number?) -> (),
+    drawSpritePart: (name: string, px: number, py: number, pw: number, ph: number, x: number, y: number, w: number, h: number?) -> (),
+    drawImage: (image: PForgeImage, x: number, y: number, w: number, h: number?) -> (),
+    drawImagePart: (image: PForgeImage, px: number, py: number, pw: number, ph: number, x: number, y: number, w: number, h: number?) -> (),
+    drawMap: (name: string, x: number, y: number, w: number, h: number?) -> (),
 }
 
--- ============================================================
--- keyboard
--- ============================================================
-declare keyboard: {
+type Keyboard = {
     A: number, W: number, S: number, D: number,
-    UP: number, DOWN: number, LEFT: number, RIGHT: number,
     SPACE: number, ENTER: number, SHIFT: number, CTRL: number,
     ALT: number, ESCAPE: number, TAB: number, BACKSPACE: number,
-    press: {[string]: number},
-    release: {[string]: number},
+    LEFT: number, RIGHT: number, UP: number, DOWN: number,
+    press: { [string]: number },
+    release: { [string]: number },
 }
 
--- ============================================================
--- mouse
--- ============================================================
-declare mouse: {
-    x: number,
-    y: number,
-    pressed: number,
-    left: number,
-    middle: number,
-    right: number,
-    press: number,
-    release: number,
-    wheel: number,
+type Mouse = {
+    x: number, y: number,
+    left: number, middle: number, right: number,
+    pressed: number, press: number, release: number, wheel: number,
 }
 
--- ============================================================
--- touch
--- ============================================================
-declare touch: {
-    touching: number,
-    press: number,
-    release: number,
-    x: number,
-    y: number,
-    touches: {any},
+type Touch = {
+    touching: number, press: number, release: number,
+    x: number, y: number, touches: { any },
 }
 
--- ============================================================
--- gamepad
--- ============================================================
-declare gamepad: {
+type Gamepad = {
     A: number, B: number, X: number, Y: number,
     LB: number, RB: number, LT: number, RT: number,
 }
 
--- ============================================================
--- system
--- ============================================================
-declare system: {
+type SystemInputs = {
+    keyboard: number, mouse: number, touch: number, gamepad: number,
+}
+
+type SystemFile = {
+    save: (obj: any, name: string, format: string?, quality: number?) -> (),
+    load: (types: any, callback: (any) -> ()) -> (),
+    loaded: any,
+    dropped: any,
+}
+
+type System = {
     time: () -> number,
     language: string,
+    update_rate: number,
+    inputs: SystemInputs,
+    prompt: (text: string, callback: ((boolean, string) -> ())?) -> (),
     say: (text: string) -> (),
     pause: () -> (),
     exit: () -> (),
-    prompt: (text: string, cb: ((boolean, string) -> ())?) -> (),
-    file: {
-        save: (obj: any, name: string, format: string?, quality: number?) -> (),
-        load: (path: string) -> (),
-    },
+    file: SystemFile,
 }
 
--- ============================================================
--- storage
--- ============================================================
-declare storage: {
-    get: (name: string, default: any?) -> any,
+type Storage = {
+    get: (name: string, defaultValue: any?) -> any,
     set: (name: string, value: any) -> (),
 }
 
--- ============================================================
--- audio
--- ============================================================
-declare audio: {
+type SoundHandle = {
+    setVolume: (v: number) -> (),
+    setPitch: (p: number) -> (),
+    setPan: (p: number) -> (),
+    getDuration: () -> number,
+    stop: () -> (),
+}
+
+type MusicHandle = {
+    setVolume: (v: number) -> (),
+    stop: () -> (),
+    play: () -> (),
+    getDuration: () -> number,
+    getPosition: () -> number,
+    setPosition: (p: number) -> (),
+}
+
+type Audio = {
     beep: (sequence: string) -> (),
     cancelBeeps: () -> (),
-    playSound: (name: string, loop: boolean?) -> {
-        setVolume: (v: number) -> (),
-        setPitch: (p: number) -> (),
-        setPan: (p: number) -> (),
-        getDuration: () -> number,
-        stop: () -> (),
-    },
-    playMusic: (name: string) -> {
-        setVolume: (v: number) -> (),
-        stop: () -> (),
-        play: () -> (),
-        getDuration: () -> number,
-        getPosition: () -> number,
-        setPosition: (p: number) -> (),
-    },
+    playSound: (name: string, loop: boolean?) -> SoundHandle,
+    playMusic: (name: string) -> MusicHandle,
 }
 
--- ============================================================
--- asset_manager
--- ============================================================
-declare asset_manager: {
+type AssetManager = {
     loadFont: (path: string) -> (),
-    loadImage: (path: string, cb: ((PForgeImage?) -> ())?) -> any,
-    loadJSON: (path: string, cb: ((any) -> ())?) -> any,
-    loadText: (path: string, cb: ((string?) -> ())?) -> any,
-    loadCSV: (path: string, cb: ((string?) -> ())?) -> any,
-    loadMarkdown: (path: string, cb: ((string?) -> ())?) -> any,
-    loadModel: (path: string) -> (),
-    wasmInstance: (name: string) -> any,
+    loadImage: (path: string, callback: ((PForgeImage?) -> ())?) -> any,
+    loadJSON: (path: string, callback: ((any) -> ())?) -> any,
+    loadText: (path: string, callback: ((string?) -> ())?) -> any,
+    loadCSV: (path: string, callback: ((string?) -> ())?) -> any,
+    loadMarkdown: (path: string, callback: ((string?) -> ())?) -> any,
+    loadModel: (path: string, scene: any, callback: ((any) -> ())?) -> any,
+    wasmInstance: (path: string, callback: ((any) -> ())?) -> any,
 }
 
--- ============================================================
--- gfx3d
--- ============================================================
-declare gfx3d: {
-    init: (opts: {background: number?, fov: number?, near: number?, far: number?}?) -> (),
-    addLight: (type: string, opts: {color: number?, intensity: number?, position: {number}?, groundColor: number?}?) -> any,
-    addBox: (name: string, opts: {size: {number}?, color: number?, position: {number}?, wireframe: boolean?}?) -> any,
-    addSphere: (name: string, opts: {radius: number?, color: number?, position: {number}?}?) -> any,
-    addPlane: (name: string, opts: {width: number?, height: number?, color: number?, position: {number}?, rotationX: number?}?) -> any,
-    addCylinder: (name: string, opts: {radiusTop: number?, radiusBottom: number?, height: number?, color: number?, position: {number}?}?) -> any,
-    addCone: (name: string, opts: {radius: number?, height: number?, color: number?, position: {number}?}?) -> any,
-    addTorus: (name: string, opts: {radius: number?, tube: number?, color: number?, position: {number}?}?) -> any,
+type LightOpts = {
+    color: number?,
+    intensity: number?,
+    position: {number}?,
+    groundColor: number?,
+}
+
+type BoxOpts = { size: {number}?, color: number?, position: {number}?, wireframe: boolean? }
+type SphereOpts = { radius: number?, color: number?, position: {number}? }
+type PlaneOpts = { width: number?, height: number?, color: number?, position: {number}?, rotationX: number? }
+type CylinderOpts = { radiusTop: number?, radiusBottom: number?, height: number?, color: number?, position: {number}? }
+type ConeOpts = { radius: number?, height: number?, color: number?, position: {number}? }
+type TorusOpts = { radius: number?, tube: number?, color: number?, position: {number}? }
+type CameraOpts = { position: {number}?, lookAt: {number}?, fov: number? }
+type Gfx3dInitOpts = { background: number?, fov: number?, near: number?, far: number? }
+
+type Gfx3d = {
+    init: (opts: Gfx3dInitOpts?) -> (),
+    addLight: (type: string, opts: LightOpts?) -> any,
+    addBox: (name: string, opts: BoxOpts?) -> any,
+    addSphere: (name: string, opts: SphereOpts?) -> any,
+    addPlane: (name: string, opts: PlaneOpts?) -> any,
+    addCylinder: (name: string, opts: CylinderOpts?) -> any,
+    addCone: (name: string, opts: ConeOpts?) -> any,
+    addTorus: (name: string, opts: TorusOpts?) -> any,
     get: (name: string) -> any,
     remove: (name: string) -> (),
-    setCamera: (opts: {position: {number}?, lookAt: {number}?, fov: number?}) -> (),
+    setPosition: (name: string, x: number, y: number, z: number) -> (),
+    translate: (name: string, dx: number, dy: number, dz: number) -> (),
+    rotate: (name: string, rx: number, ry: number, rz: number) -> (),
+    setColor: (name: string, color: number) -> (),
+    setCamera: (opts: CameraOpts) -> (),
     moveCamera: (dx: number, dy: number, dz: number) -> (),
     render: () -> (),
-    rotate: (name: string, rx: number, ry: number, rz: number) -> (),
-    translate: (name: string, dx: number, dy: number, dz: number) -> (),
-    setPosition: (name: string, x: number, y: number, z: number) -> (),
-    setColor: (name: string, color: number) -> (),
     getDelta: () -> number,
 }
 
 -- ============================================================
--- PForgeImage
+-- CLASSES
 -- ============================================================
-declare class PForgeImage
-    new: (width: number, height: number, centered: boolean?) -> PForgeImage
-    width: number
-    height: number
-    clear: (self: PForgeImage, color: string?) -> ()
-    setRGB: (self: PForgeImage, x: number, y: number, r: number, g: number, b: number) -> ()
-    setRGBA: (self: PForgeImage, x: number, y: number, r: number, g: number, b: number, a: number) -> ()
-    getRGB: (self: PForgeImage, x: number, y: number) -> {r: number, g: number, b: number}
-    getRGBA: (self: PForgeImage, x: number, y: number) -> {r: number, g: number, b: number, a: number}
-    setColor: (self: PForgeImage, c: string) -> ()
-    setAlpha: (self: PForgeImage, a: number) -> ()
-    setBlending: (self: PForgeImage, b: string) -> ()
-    setFont: (self: PForgeImage, f: string) -> ()
-    setPixelated: (self: PForgeImage, p: boolean) -> ()
-    setLineWidth: (self: PForgeImage, w: number) -> ()
-    setLineDash: (self: PForgeImage, d: {number}) -> ()
-    fillRect: (self: PForgeImage, x: number, y: number, w: number, h: number, color: string?) -> ()
-    drawRect: (self: PForgeImage, x: number, y: number, w: number, h: number, color: string?) -> ()
-    fillRound: (self: PForgeImage, x: number, y: number, w: number, h: number, color: string?) -> ()
-    drawRound: (self: PForgeImage, x: number, y: number, w: number, h: number, color: string?) -> ()
-    fillRoundRect: (self: PForgeImage, x: number, y: number, w: number, h: number, r: number, color: string?) -> ()
-    drawRoundRect: (self: PForgeImage, x: number, y: number, w: number, h: number, r: number, color: string?) -> ()
-    drawLine: (self: PForgeImage, x1: number, y1: number, x2: number, y2: number) -> ()
-    drawSprite: (self: PForgeImage, name: string, x: number, y: number, w: number, h: number?) -> ()
-    drawImage: (self: PForgeImage, image: PForgeImage, x: number, y: number, w: number, h: number?) -> ()
-    drawText: (self: PForgeImage, text: string, x: number, y: number, size: number, color: string?) -> ()
-    textWidth: (self: PForgeImage, text: string, size: number) -> number
-end
+type PForgeImage = {
+    width: number,
+    height: number,
+    clear: (self: PForgeImage, color: string?) -> (),
+    setRGB: (self: PForgeImage, x: number, y: number, r: number, g: number, b: number) -> (),
+    setRGBA: (self: PForgeImage, x: number, y: number, r: number, g: number, b: number, a: number) -> (),
+    getRGB: (self: PForgeImage, x: number, y: number, result: any?) -> { r: number, g: number, b: number },
+    getRGBA: (self: PForgeImage, x: number, y: number, result: any?) -> { r: number, g: number, b: number, a: number },
+    setColor: (self: PForgeImage, c: string) -> (),
+    setAlpha: (self: PForgeImage, a: number) -> (),
+    setBlending: (self: PForgeImage, b: string) -> (),
+    setFont: (self: PForgeImage, f: string) -> (),
+    setPixelated: (self: PForgeImage, p: boolean) -> (),
+    setLineWidth: (self: PForgeImage, w: number) -> (),
+    setLineDash: (self: PForgeImage, d: {number}) -> (),
+    fillRect: (self: PForgeImage, x: number, y: number, w: number, h: number, color: string?) -> (),
+    drawRect: (self: PForgeImage, x: number, y: number, w: number, h: number, color: string?) -> (),
+    fillRound: (self: PForgeImage, x: number, y: number, w: number, h: number, color: string?) -> (),
+    drawRound: (self: PForgeImage, x: number, y: number, w: number, h: number, color: string?) -> (),
+    fillRoundRect: (self: PForgeImage, x: number, y: number, w: number, h: number, r: number, color: string?) -> (),
+    drawRoundRect: (self: PForgeImage, x: number, y: number, w: number, h: number, r: number, color: string?) -> (),
+    drawLine: (self: PForgeImage, x1: number, y1: number, x2: number, y2: number) -> (),
+    drawSprite: (self: PForgeImage, name: string, x: number, y: number, w: number, h: number?) -> (),
+    drawImage: (self: PForgeImage, image: PForgeImage, x: number, y: number, w: number, h: number?) -> (),
+    drawText: (self: PForgeImage, text: string, x: number, y: number, size: number, color: string?) -> (),
+    drawTextOutline: (self: PForgeImage, text: string, x: number, y: number, size: number, color: string?) -> (),
+    textWidth: (self: PForgeImage, text: string, size: number) -> number,
+}
+
+type PForgeSprite = {
+    frames: { PForgeImage },
+    fps: number,
+    setFPS: (self: PForgeSprite, fps: number) -> (),
+    setFrame: (self: PForgeSprite, n: number) -> (),
+}
+
+type PForgeMap = {
+    width: number,
+    height: number,
+    tileWidth: number,
+    tileHeight: number,
+    data: { any },
+    get: (self: PForgeMap, x: number, y: number) -> any,
+    set: (self: PForgeMap, x: number, y: number, val: any) -> (),
+}
+
+type PForgeSound = {
+    write: (self: PForgeSound, ch: number, idx: number, val: number) -> (),
+    read: (self: PForgeSound, ch: number, idx: number) -> number,
+    play: (self: PForgeSound, volume: number?, pitch: number?, pan: number?, loop: boolean?) -> (),
+}
 
 -- ============================================================
--- PForgeSprite
+-- GLOBAIS
 -- ============================================================
-declare class PForgeSprite
-    new: (frames: {PForgeImage}?) -> PForgeSprite
-    frames: {PForgeImage}
-    fps: number
-    setFPS: (self: PForgeSprite, fps: number) -> ()
-    setFrame: (self: PForgeSprite, n: number) -> ()
-end
+declare screen: Screen
+declare keyboard: Keyboard
+declare mouse: Mouse
+declare touch: Touch
+declare gamepad: Gamepad
+declare system: System
+declare storage: Storage
+declare audio: Audio
+declare asset_manager: AssetManager
+declare gfx3d: Gfx3d
+
+declare sprites: { [string]: PForgeSprite }
+declare maps: { [string]: PForgeMap }
+declare sounds: { [string]: PForgeSound }
+declare music: { [string]: PForgeSound }
+
+declare PForgeImage: { new: (width: number, height: number, centered: boolean?) -> PForgeImage }
+declare PForgeSprite: { new: (frames: { PForgeImage }?) -> PForgeSprite }
+declare PForgeMap: { new: (width: number, height: number, tileWidth: number, tileHeight: number) -> PForgeMap }
+declare PForgeSound: { new: (channels: number, length: number, sampleRate: number) -> PForgeSound }
 
 -- ============================================================
--- PForgeMap
--- ============================================================
-declare class PForgeMap
-    new: (width: number, height: number, tileWidth: number, tileHeight: number) -> PForgeMap
-    width: number
-    height: number
-    tileWidth: number
-    tileHeight: number
-    data: {any}
-    get: (self: PForgeMap, x: number, y: number) -> any
-    set: (self: PForgeMap, x: number, y: number, val: any) -> ()
-end
-
--- ============================================================
--- PForgeSound
--- ============================================================
-declare class PForgeSound
-    new: (channels: number, length: number, sampleRate: number) -> PForgeSound
-    write: (self: PForgeSound, ch: number, idx: number, val: number) -> ()
-    read: (self: PForgeSound, ch: number, idx: number) -> number
-    play: (self: PForgeSound) -> ()
-end
-
--- ============================================================
--- Registries
--- ============================================================
-declare sprites: {[string]: PForgeSprite}
-declare maps: {[string]: PForgeMap}
-declare sounds: {[string]: PForgeSound}
-declare music: {[string]: PForgeSound}
-
--- ============================================================
--- Lifecycle hooks
+-- HOOKS
 -- ============================================================
 declare onInit: (fn: () -> ()) -> ()
 declare onUpdate: (fn: (dt: number, frame: number) -> ()) -> ()
 declare onDraw: (fn: () -> ()) -> ()
 
+declare init: (fn: () -> ()) -> ()
+declare update: (fn: (dt: number, frame: number) -> ()) -> ()
+declare draw: (fn: () -> ()) -> ()
+
 -- ============================================================
--- Threading helpers
+-- THREADING
 -- ============================================================
 declare after: (seconds: number, action: () -> ()) -> any
 declare every: (seconds: number, action: () -> ()) -> any
@@ -259,7 +269,7 @@ declare do_: (action: () -> ()) -> any
 declare sleep: (seconds: number) -> ()
 
 -- ============================================================
--- Math / time helpers
+-- MATH / TIME HELPERS
 -- ============================================================
 declare seconds: (n: number) -> number
 declare milliseconds: (n: number) -> number
@@ -271,23 +281,62 @@ declare acosd: (x: number) -> number
 declare atand: (x: number) -> number
 declare atan2d: (y: number, x: number) -> number
 
--- ============================================================
--- Multiplayer
--- ============================================================
-declare class Server
-    new: (room: string?) -> Server
-    room: string
-    new_connections: {any}
-    active_connections: {any}
-    messages: {any}
-    closed_connections: {any}
-    stop: (self: Server) -> ()
-end
+declare round: (n: number) -> number
+declare floor: (n: number) -> number
+declare ceil: (n: number) -> number
+declare abs: (n: number) -> number
+declare sign: (n: number) -> number
+declare sqrt: (n: number) -> number
+declare pow: (a: number, b: number) -> number
+declare min: (...number) -> number
+declare max: (...number) -> number
+declare sin: (n: number) -> number
+declare cos: (n: number) -> number
+declare tan: (n: number) -> number
+declare PI: number
 
-declare class ServerConnection
-    new: (room: string?) -> ServerConnection
-    status: string
-    messages: {any}
-    send: (self: ServerConnection, data: any) -> ()
-    disconnect: (self: ServerConnection) -> ()
-end
+-- ============================================================
+-- UTILITÁRIOS
+-- ============================================================
+type Random = {
+    next: () -> number,
+    nextInt: (max: number) -> number,
+    seed: (v: number) -> (),
+    clone: (s: number?) -> Random,
+}
+
+declare random: Random
+declare List: () -> { any }
+
+-- ============================================================
+-- THREE.JS BRIDGE
+-- ============================================================
+declare three: {
+    create: (name: string, ...any) -> string,
+    call: (handle: string, method: string, ...any) -> any,
+    get: (handle: string, prop: string) -> any,
+    set: (handle: string, prop: string, value: any) -> (),
+    const: (name: string) -> number,
+}
+
+-- ============================================================
+-- MULTIPLAYER
+-- ============================================================
+type ServerConnection = {
+    status: string,
+    messages: { any },
+    send: (self: ServerConnection, data: any) -> (),
+    disconnect: (self: ServerConnection) -> (),
+}
+
+type Server = {
+    room: string,
+    new_connections: { any },
+    active_connections: { any },
+    messages: { any },
+    closed_connections: { any },
+    stop: (self: Server) -> (),
+}
+
+declare Server: { new: (room: string?) -> Server }
+declare ServerConnection: { new: (room: string?) -> ServerConnection }
