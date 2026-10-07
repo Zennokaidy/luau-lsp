@@ -20,36 +20,47 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Rodar build.sh
-        run: bash web/build.sh
+      - name: Limpar artefatos antigos de web/public
+        run: |
+          rm -f web/public/Luau.LanguageServer.Web.js
+          rm -f web/public/Luau.LanguageServer.Web.wasm
 
-      - name: Diagnóstico — listar tudo que foi gerado
+      - name: Build da imagem Docker (Emscripten)
+        run: docker build -t emscripten_updated web
+
+      - name: Configurar CMake (com patch de compatibilidade)
+        run: |
+          docker run --rm -v $(pwd):/src emscripten_updated \
+            emcmake cmake -S/src -B/src/build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+
+      - name: Compilar o alvo Web (WASM)
+        run: |
+          docker run --rm -v $(pwd):/src emscripten_updated \
+            cmake --build /src/build \
+            --target Luau.LanguageServer.Web \
+            --config Release
+
+      - name: Instalar dependências do demo web
+        working-directory: web
+        run: npm install
+
+      - name: Montar arquivos finais em web/public/
+        run: |
+          cat web/demoprepend.js build/Luau.LanguageServer.Web.js > web/public/Luau.LanguageServer.Web.js
+          cp build/Luau.LanguageServer.Web.wasm web/public/Luau.LanguageServer.Web.wasm
+
+      - name: Diagnóstico (sempre roda)
         if: always()
         run: |
           echo "===== build/ ====="
           ls -la build/ || true
           echo "===== web/public/ ====="
           ls -la web/public/ || true
-          echo "===== web/ ====="
-          ls -la web/ || true
-
-      - name: Upload do build/ completo
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-folder
-          path: build/
-          if-no-files-found: warn
-
-      - name: Upload do web/public/ completo
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: web-public-folder
-          path: web/public/
-          if-no-files-found: warn
 
       - name: Upload dos artefatos finais
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: luau-lsp-wasm
