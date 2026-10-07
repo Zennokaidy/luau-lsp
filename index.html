@@ -1,0 +1,1992 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
+<title>Monaco Editor + Luau Autocomplete (custom widget)</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fira+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@vscode/codicons@0.0.36/dist/codicon.css">
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+
+  body {
+    font-family: 'Segoe UI', 'Fira Mono', monospace;
+    background: #1a1a1a;
+    color: #d4d4d4;
+    height: 100vh;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  .editor-container { flex: 1; min-height: 0; position: relative; background: #1a1a1a; }
+  #monaco { position: absolute; inset: 0; }
+
+  /* gutter border — 15px wide on the right, matching the old editor */
+  .monaco-editor .margin { position: relative; }
+  .monaco-editor .margin::after {
+    content: '';
+    position: absolute;
+    top: 0; right: 0; bottom: 0;
+    width: 15px;
+    background: #2f2f2f;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  .status-bar {
+    background: #007acc; color: #fff; height: 22px; display: flex; align-items: center;
+    padding: 0 12px; font-size: 12px; gap: 15px; flex: none; white-space: nowrap; overflow: hidden;
+    font-family: 'Segoe UI', Roboto, sans-serif;
+  }
+  .status-bar .right { margin-left: auto; display: flex; gap: 15px; }
+
+  /* ============================================================
+     WIDGET CSS — unchanged
+     ============================================================ */
+  .ac-widget {
+    position: fixed; top: 0; left: 0; display: none; align-items: flex-start;
+    z-index: 9999; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    font-size: 13px; color: #d4d4d4; -webkit-user-select: none; user-select: none; overflow: visible;
+  }
+
+  .ac-list-pane {
+    display: flex; flex-direction: column; background: #252526; border: 1px solid #454545;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, .55); flex: none; overflow: hidden;
+    position: relative; border-radius: 2px;
+  }
+
+  .ac-list { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0; }
+  .ac-list::-webkit-scrollbar { width: 10px; }
+  .ac-list::-webkit-scrollbar-thumb { background: #4a4a4a; }
+  .ac-list::-webkit-scrollbar-thumb:hover { background: #5a5a5a; }
+  .ac-list::-webkit-scrollbar-track { background: transparent; }
+
+  .ac-item {
+    display: flex; align-items: center; gap: 4px; padding: 0 8px 0 6px;
+    height: 19px; line-height: 19px; cursor: pointer;
+    white-space: nowrap; overflow: hidden;
+    font-family: 'Fira Mono', Consolas, monospace; font-size: 13px; color: #d4d4d4;
+  }
+  .ac-item:hover    { background: #2a2d2e; }
+  .ac-item.focused,
+  .ac-item.selected { background: #04395e; color: #ffffff; }
+
+  .ac-icon-container {
+    display: flex; align-items: center; justify-content: center;
+    width: 16px; height: 19px; flex: none;
+  }
+  .ac-icon-container .codicon {
+    font-size: 14px; line-height: 1; display: inline-block;
+  }
+
+  .ic-method     { color: #b180d7; }
+  .ic-function   { color: #b180d7; }
+  .ic-variable   { color: #75beff; }
+  .ic-property   { color: #cccccc; }
+  .ic-constant   { color: #cccccc; }
+  .ic-class      { color: #ee9d28; }
+  .ic-interface  { color: #75beff; }
+  .ic-type       { color: #4ec9b0; }
+  .ic-keyword    { color: #cccccc; }
+  .ic-string     { color: #ce9178; }
+  .ic-namespace  { color: #5CB0D7; }
+
+  .ac-text {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: none;
+  }
+
+  .ac-match { color: #2aaaff; font-weight: 700; }
+  .ac-item.focused .ac-match,
+  .ac-item.selected .ac-match { color: #75beff; }
+
+  .ac-detail {
+    display: none; color: #cfcfcf; font-size: 12px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    flex: 1; text-align: right; padding-left: 12px; padding-right: 4px;
+  }
+  .ac-item.focused .ac-detail,
+  .ac-item.selected .ac-detail { display: block; }
+
+  .ac-docs {
+    background: #1e1e1e; border: 1px solid #454545; margin-left: -1px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, .55); overflow-y: auto; overflow-x: hidden;
+    padding: 10px 12px; flex: none; position: relative;
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    font-size: 12.5px; line-height: 1.45; color: #cccccc; border-radius: 2px;
+  }
+  .ac-docs::-webkit-scrollbar { width: 10px; }
+  .ac-docs::-webkit-scrollbar-thumb { background: #4a4a4a; }
+  .ac-docs::-webkit-scrollbar-track { background: transparent; }
+
+  .docs-name {
+    font-family: 'Fira Mono', monospace; font-size: 13px; font-weight: 700;
+    color: #ffffff; word-break: break-word;
+  }
+  .docs-type {
+    font-family: 'Fira Mono', monospace; font-size: 11.5px;
+    color: #9cdcfe; margin-top: 3px; word-break: break-word;
+  }
+  .docs-doc {
+    margin-top: 6px; color: #c8c8c8;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .docs-code {
+    margin-top: 8px; padding: 6px 8px; background: #141414;
+    border: 1px solid #2c2c2c; border-radius: 3px;
+    font-family: 'Fira Mono', monospace; font-size: 12px;
+    color: #ce9178; white-space: pre-wrap; word-break: break-word;
+  }
+  .docs-empty { color: #6f6f6f; font-style: italic; }
+  .docs-source {
+    margin-top: 10px; color: #6f6f6f; font-size: 11px;
+  }
+  .docs-source code { color: #75beff; font-family: 'Fira Mono', monospace; }
+
+  .ac-resize { position: absolute; z-index: 100; background: transparent; touch-action: none; }
+  .ac-resize-e       { top: 0; width: 5px; cursor: ew-resize; }
+  .ac-resize-e:hover { background: rgba(117, 190, 255, .22); }
+  .ac-resize-docs-e  { top: 0; right: 0; width: 5px; cursor: ew-resize; }
+  .ac-resize-docs-e:hover { background: rgba(117, 190, 255, .22); }
+  .ac-resize-s       { left: 0; height: 5px; cursor: ns-resize; }
+  .ac-resize-s:hover { background: rgba(117, 190, 255, .22); }
+  .ac-resize-se { width: 14px; height: 14px; cursor: nwse-resize; z-index: 101; }
+  .ac-resize-se::after {
+    content: ''; position: absolute; right: 3px; bottom: 3px;
+    width: 7px; height: 7px;
+    border-right: 2px solid #6a6a6a; border-bottom: 2px solid #6a6a6a;
+    pointer-events: none; transition: border-color .15s;
+  }
+  .ac-resize-se:hover::after { border-color: #75beff; }
+
+  @media (pointer: coarse) {
+    .ac-resize-e, .ac-resize-docs-e { width: 16px; }
+    .ac-resize-s { height: 16px; }
+    .ac-resize-se { width: 26px; height: 26px; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="editor-container">
+    <div id="monaco"></div>
+  </div>
+
+  <div class="status-bar">
+    <span id="cursorPos">Ln 1, Col 1</span>
+    <span>Spaces: 2</span>
+    <span>UTF-8</span>
+    <span>Luau</span>
+    <div class="right">
+      <span id="tsStatus">Monaco: loading…</span>
+      <span>Ctrl + Space: suggestions</span>
+    </div>
+  </div>
+
+  <div class="ac-widget" id="acWidget">
+    <div class="ac-list-pane" id="acListPane">
+      <div class="ac-list" id="acList"></div>
+    </div>
+    <div class="ac-docs" id="acDocs"></div>
+    <div class="ac-resize ac-resize-e"      data-resize="e"></div>
+    <div class="ac-resize ac-resize-docs-e" data-resize="docs-e"></div>
+    <div class="ac-resize ac-resize-s"      data-resize="s"></div>
+    <div class="ac-resize ac-resize-se"     data-resize="se"></div>
+  </div>
+
+<script>
+/* ============================================================
+   LUAU LSP BRIDGE
+   JSON-RPC puro sobre postMessage. Sem bundler, sem ESM, sem nada.
+   ============================================================ */
+(function () {
+  'use strict';
+
+  let lspWorker = null;
+  let lspReady = false;
+  let nextId = 1;
+  const pending = new Map();
+
+  /* --- Framing LSP (Content-Length) --- */
+  function encode(obj) {
+    return JSON.stringify(obj);
+  }
+
+  function decode(str) {
+    const out = [];
+    // O worker manda um JSON por mensagem (sem Content-Length).
+    // Algumas vezes ele manda dois JSONs colados — separa por linha.
+    for (const line of str.split('\n')) {
+      const s = line.trim();
+      if (!s) continue;
+      try { out.push(JSON.parse(s)); }
+      catch (e) { console.error('LSP JSON bad:', s); }
+    }
+    return out;
+  }
+
+  function send(obj) { lspWorker.postMessage(encode(obj)); }
+
+  function request(method, params) {
+    return new Promise((resolve, reject) => {
+      const id = nextId++;
+      pending.set(id, { resolve, reject });
+      send({ jsonrpc: '2.0', id, method, params });
+    });
+  }
+
+  function notify(method, params) {
+    send({ jsonrpc: '2.0', method, params });
+  }
+
+  /* --- Documento --- */
+  const DOC_URI = 'file:///workspace/1';
+  const ROOT_URI = 'file:///workspace';
+  let docOpened = false;
+  let docVersion = 0;
+
+  function initialize() {
+  const LSP_CDN = 'https://raw.githubusercontent.com/Zennokaidy/luau-lsp/main/web/public';
+
+  return fetch(LSP_CDN + '/Luau.LanguageServer.Web.js')
+    .then(function (response) {
+      if (!response.ok) throw new Error('Falha ao baixar worker: ' + response.status);
+      return response.text();
+    })
+    .then(function (rawText) {
+      const workerScriptText = rawText
+        .replace(/^\s*export\s+default\s+[^\n;]*;?\s*$/m, '')
+        .replace(
+          /https:\/\/cdn\.jsdelivr\.net\/gh\/Zennokaidy\/luau-lsp@main\/web\/public\//g,
+          'https://raw.githubusercontent.com/Zennokaidy/luau-lsp/main/web/public/'
+        );
+
+      const blob = new Blob([workerScriptText], { type: 'application/javascript' });
+      const blobUrl = URL.createObjectURL(blob);
+
+      lspWorker = new Worker(blobUrl);
+      URL.revokeObjectURL(blobUrl);
+
+      lspWorker.addEventListener('message', function (e) {
+        console.log('[LSP raw]', e.data);
+        const d = e.data || {};
+        if (d.type === 'info') { console.log('[LSP info]', d.msg); return; }
+        if (d.type === 'error') { console.error('[LSP error]', d.msg); return; }
+        if (d.type !== 'output') return;
+
+        for (const m of decode(d.msg)) {
+          if (m.id !== undefined && pending.has(m.id)) {
+            const { resolve, reject } = pending.get(m.id);
+            pending.delete(m.id);
+            m.error ? reject(m.error) : resolve(m.result);
+          } else if (m.method && m.id !== undefined) {
+            send({ jsonrpc: '2.0', id: m.id, result: null });
+          } else if (m.method) {
+            if (m.method === 'window/logMessage') {
+              console.log('[LSP]', m.params.message);
+            }
+          }
+        }
+      });
+
+      return request('initialize', {
+        processId: null,
+        rootUri: ROOT_URI,
+        workspaceFolders: [{ uri: ROOT_URI, name: 'workspace' }],
+        capabilities: {
+          textDocument: {
+            completion: {
+              completionItem: {
+                snippetSupport: false,
+                documentationFormat: ['markdown', 'plaintext'],
+                resolveSupport: { properties: ['documentation', 'detail'] }
+              },
+              contextSupport: true
+            },
+            synchronization: { dynamicRegistration: false },
+            publishDiagnostics: {}
+          }
+        },
+        initializationOptions: null
+      });
+    })
+    .then(function (initRes) {
+      notify('initialized', {});
+      lspReady = true;
+      console.log('[LSP] initialized', initRes);
+      return initRes;
+    });
+}
+
+  function didOpen(text) {
+    if (docOpened) return;
+    docOpened = true;
+    docVersion = 0;
+    notify('textDocument/didOpen', {
+      textDocument: { uri: DOC_URI, languageId: 'luau', version: 0, text }
+    });
+  }
+
+  function didChange(text) {
+    if (!lspReady) return;
+    if (!docOpened) { didOpen(text); return; }
+    docVersion++;
+    notify('textDocument/didChange', {
+      textDocument: { uri: DOC_URI, version: docVersion },
+      contentChanges: [{ text }]
+    });
+  }
+
+  function completion(offset, text) {
+    if (!lspReady || !docOpened) return Promise.resolve(null);
+    const pos = monacoModel.getPositionAt(offset);
+    return request('textDocument/completion', {
+      textDocument: { uri: DOC_URI },
+      position: { line: pos.lineNumber - 1, character: pos.column - 1 },
+      context: { triggerKind: 1 }
+    });
+  }
+
+  window.LuauLSP = {
+    initialize,
+    didOpen,
+    didChange,
+    completion,
+    isReady: () => lspReady && docOpened
+  };
+})();
+</script>
+
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
+
+<script>
+'use strict';
+
+/* ============================================================
+   0. CONSTANTS
+   ============================================================ */
+const MONACO_BASE = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min';
+
+const INITIAL_TEXT = `local msg = "Hello World!"  -- variable
+
+onInit(function()
+  print(msg)
+end)`;
+
+const KIND_META = {
+  function:      { label: 'function',  codicon: 'codicon-symbol-method',      cls: 'ic-function'    },
+  method:        { label: 'method',    codicon: 'codicon-symbol-method',      cls: 'ic-method'      },
+  variable:      { label: 'variable',  codicon: 'codicon-symbol-variable',    cls: 'ic-variable'    },
+  property:      { label: 'property',  codicon: 'codicon-symbol-property',    cls: 'ic-property'    },
+  constant:      { label: 'constant',  codicon: 'codicon-symbol-constant',    cls: 'ic-constant'    },
+  class:         { label: 'class',     codicon: 'codicon-symbol-class',       cls: 'ic-class'       },
+  interface:     { label: 'interface', codicon: 'codicon-symbol-interface',   cls: 'ic-interface'   },
+  type:          { label: 'type',      codicon: 'codicon-symbol-key',         cls: 'ic-type'        },
+  keyword:       { label: 'keyword',   codicon: 'codicon-symbol-keyword',     cls: 'ic-keyword'     },
+  namespace:     { label: 'namespace', codicon: 'codicon-symbol-namespace',   cls: 'ic-namespace'   },
+  'string-word': { label: 'text',      codicon: 'codicon-symbol-string',      cls: 'ic-string'      }
+};
+
+/* ============================================================
+   LUAU / PIXELFORGE API — autocomplete catalog
+   ============================================================ */
+const LUAU_API = {
+  globals: [
+    /* ---------- Lua built-ins ---------- */
+    { label: 'print', kind: 'function', insert: 'print()',
+      detail: '(function) print(...)',
+      doc: 'Prints a message to the output console.',
+      example: 'print("Hello, World!")' },
+    { label: 'warn', kind: 'function', insert: 'warn()',
+      detail: '(function) warn(...)',
+      doc: 'Prints a warning to the output console.',
+      example: 'warn("Careful!")' },
+    { label: 'error', kind: 'function', insert: 'error()',
+      detail: '(function) error(message, level?)',
+      doc: 'Raises an error and stops execution.',
+      example: 'error("Something went wrong")' },
+    { label: 'assert', kind: 'function', insert: 'assert()',
+      detail: '(function) assert(value, message?)',
+      doc: 'Raises an error if the value is false.',
+      example: 'assert(x > 0, "x must be positive")' },
+    { label: 'type', kind: 'function', insert: 'type()',
+      detail: '(function) type(value): string',
+      doc: 'Returns the type of the value as a string ("number", "string", "table", ...).',
+      example: 'print(type(123))  -- "number"' },
+    { label: 'typeof', kind: 'function', insert: 'typeof()',
+      detail: '(function) typeof(value): string',
+      doc: 'Returns the Luau type of the value.',
+      example: 'print(typeof({}))  -- "table"' },
+    { label: 'tostring', kind: 'function', insert: 'tostring()',
+      detail: '(function) tostring(value): string',
+      doc: 'Converts a value to a string.',
+      example: 'print(tostring(42))' },
+    { label: 'tonumber', kind: 'function', insert: 'tonumber()',
+      detail: '(function) tonumber(value, base?): number?',
+      doc: 'Converts a value to a number, optionally in the given base.',
+      example: 'print(tonumber("42"))' },
+    { label: 'pairs', kind: 'function', insert: 'pairs()',
+      detail: '(function) pairs(t: table)',
+      doc: 'Iterates over every key-value pair of a table.',
+      example: 'for k, v in pairs(t) do\n  print(k, v)\nend' },
+    { label: 'ipairs', kind: 'function', insert: 'ipairs()',
+      detail: '(function) ipairs(t: table)',
+      doc: 'Iterates over the sequence part of the table in order.',
+      example: 'for i, v in ipairs(list) do\n  print(i, v)\nend' },
+    { label: 'next', kind: 'function', insert: 'next()',
+      detail: '(function) next(t: table, index?)',
+      doc: 'Returns the next key-value pair of a table.' },
+    { label: 'select', kind: 'function', insert: 'select()',
+      detail: '(function) select(n, ...)',
+      doc: 'Returns the arguments after index n, or the count if n is "#".' },
+    { label: 'pcall', kind: 'function', insert: 'pcall()',
+      detail: '(function) pcall(fn, ...)',
+      doc: 'Calls a function in protected mode; returns success and results.',
+      example: 'local ok, err = pcall(function()\n  error("boom")\nend)' },
+    { label: 'xpcall', kind: 'function', insert: 'xpcall()',
+      detail: '(function) xpcall(fn, handler, ...)',
+      doc: 'Like pcall, but with a custom error handler.' },
+    { label: 'setmetatable', kind: 'function', insert: 'setmetatable()',
+      detail: '(function) setmetatable(t, mt)',
+      doc: 'Sets the metatable of a table.' },
+    { label: 'getmetatable', kind: 'function', insert: 'getmetatable()',
+      detail: '(function) getmetatable(t): table?',
+      doc: 'Returns the metatable of a table.' },
+    { label: 'rawget', kind: 'function', insert: 'rawget()',
+      detail: '(function) rawget(t, k)',
+      doc: 'Gets a value without invoking metamethods.' },
+    { label: 'rawset', kind: 'function', insert: 'rawset()',
+      detail: '(function) rawset(t, k, v)',
+      doc: 'Sets a value without invoking metamethods.' },
+    { label: 'require', kind: 'function', insert: 'require()',
+      detail: '(function) require(module: string)',
+      doc: 'Loads and returns a module.' },
+
+    /* ---------- PixelForge lifecycle ---------- */
+    { label: 'init', kind: 'function', insert: 'function init()\n  \nend',
+      detail: '(function) init()',
+      doc: 'Called once, before the first frame.',
+      example: 'function init()\n  -- setup\nend' },
+    { label: 'update', kind: 'function', insert: 'function update(dt, frame)\n  \nend',
+      detail: '(function) update(dt: number, frame: number)',
+      doc: 'Called every frame. dt is delta time in seconds (e.g. 0.016 at 60 FPS). Never use fixed values for movement — always multiply by dt.',
+      example: 'function update(dt, frame)\n  playerX = playerX + 2 * dt\nend' },
+    { label: 'draw', kind: 'function', insert: 'function draw()\n  \nend',
+      detail: '(function) draw()',
+      doc: 'Called every frame, after update.',
+      example: 'function draw()\n  screen.clear("#0f1115")\nend' },
+
+    /* ---------- Constants ---------- */
+    { label: 'true',  kind: 'constant', insert: 'true',  detail: '(constant) true',  doc: 'Boolean true.' },
+    { label: 'false', kind: 'constant', insert: 'false', detail: '(constant) false', doc: 'Boolean false.' },
+    { label: 'nil',   kind: 'constant', insert: 'nil',   detail: '(constant) nil',   doc: 'Absence of value.' },
+
+    /* ---------- Luau keywords ---------- */
+    { label: 'local',    kind: 'keyword', insert: 'local ',    detail: '(keyword) local' },
+    { label: 'function', kind: 'keyword', insert: 'function ', detail: '(keyword) function' },
+    { label: 'if',       kind: 'keyword', insert: 'if ',       detail: '(keyword) if' },
+    { label: 'then',     kind: 'keyword', insert: 'then',      detail: '(keyword) then' },
+    { label: 'else',     kind: 'keyword', insert: 'else',      detail: '(keyword) else' },
+    { label: 'elseif',   kind: 'keyword', insert: 'elseif ',   detail: '(keyword) elseif' },
+    { label: 'end',      kind: 'keyword', insert: 'end',       detail: '(keyword) end' },
+    { label: 'for',      kind: 'keyword', insert: 'for ',      detail: '(keyword) for' },
+    { label: 'while',    kind: 'keyword', insert: 'while ',    detail: '(keyword) while' },
+    { label: 'do',       kind: 'keyword', insert: 'do',        detail: '(keyword) do' },
+    { label: 'return',   kind: 'keyword', insert: 'return ',   detail: '(keyword) return' },
+    { label: 'break',    kind: 'keyword', insert: 'break',     detail: '(keyword) break' },
+    { label: 'continue', kind: 'keyword', insert: 'continue',  detail: '(keyword) continue' },
+    { label: 'in',       kind: 'keyword', insert: 'in ',       detail: '(keyword) in' },
+    { label: 'and',      kind: 'keyword', insert: 'and ',      detail: '(keyword) and' },
+    { label: 'or',       kind: 'keyword', insert: 'or ',       detail: '(keyword) or' },
+    { label: 'not',      kind: 'keyword', insert: 'not ',      detail: '(keyword) not' },
+    { label: 'self',     kind: 'keyword', insert: 'self',      detail: '(keyword) self' },
+
+    /* ---------- Runtime namespaces ---------- */
+    { label: 'screen',        kind: 'namespace', insert: 'screen',        detail: '(namespace) screen',        doc: '2D drawing API. Origin (0,0) is the center of the screen. 1 unit = 100 pixels.' },
+    { label: 'keyboard',      kind: 'namespace', insert: 'keyboard',      detail: '(namespace) keyboard',      doc: 'Keyboard input.' },
+    { label: 'mouse',         kind: 'namespace', insert: 'mouse',         detail: '(namespace) mouse',         doc: 'Mouse input. Coordinates are in units, origin at the screen center.' },
+    { label: 'touch',         kind: 'namespace', insert: 'touch',         detail: '(namespace) touch',         doc: 'Touch input.' },
+    { label: 'gamepad',       kind: 'namespace', insert: 'gamepad',       detail: '(namespace) gamepad',       doc: 'Gamepad input. Returns 0 if no controller is connected.' },
+    { label: 'system',        kind: 'namespace', insert: 'system',        detail: '(namespace) system',        doc: 'System utilities.' },
+    { label: 'storage',       kind: 'namespace', insert: 'storage',       detail: '(namespace) storage',       doc: 'localStorage-backed persistence. Values are serialized with JSON.stringify.' },
+    { label: 'audio',         kind: 'namespace', insert: 'audio',         detail: '(namespace) audio',         doc: 'Procedural sound playback.' },
+    { label: 'asset_manager', kind: 'namespace', insert: 'asset_manager', detail: '(namespace) asset_manager', doc: 'Asset loading (images, JSON, text, CSV, Markdown, fonts, models, WASM).' },
+    { label: 'gfx3d',         kind: 'namespace', insert: 'gfx3d',         detail: '(namespace) gfx3d',         doc: '3D graphics API (wrapper over Three.js). Call gfx3d.init() before using.' },
+
+    /* ---------- Registries ---------- */
+    { label: 'sprites', kind: 'namespace', insert: 'sprites', detail: '(registry) sprites', doc: 'Global sprite registry. Assign with sprites["name"] = sprite.' },
+    { label: 'maps',    kind: 'namespace', insert: 'maps',    detail: '(registry) maps',    doc: 'Global tilemap registry. Assign with maps["name"] = map.' },
+    { label: 'sounds',  kind: 'namespace', insert: 'sounds',  detail: '(registry) sounds',  doc: 'Global sound registry. Assign with sounds["name"] = sound.' },
+    { label: 'music',   kind: 'namespace', insert: 'music',   detail: '(registry) music',   doc: 'Global music registry. Assign with music["name"] = sound.' },
+
+    /* ---------- Classes ---------- */
+    { label: 'PForgeImage', kind: 'class', insert: 'PForgeImage.new()',
+      detail: '(class) PForgeImage(width, height, centered?)',
+      doc: 'Offscreen canvas you can manipulate pixel by pixel. centered=true puts the origin at the center of the image.',
+      example: 'local img = PForgeImage.new(32, 32, true)' },
+    { label: 'PForgeSprite', kind: 'class', insert: 'PForgeSprite.new()',
+      detail: '(class) PForgeSprite(frames)',
+      doc: 'A collection of frames (PForgeImage) with configurable FPS.',
+      example: 'local s = PForgeSprite.new({frame1, frame2, frame3})' },
+    { label: 'PForgeMap', kind: 'class', insert: 'PForgeMap.new()',
+      detail: '(class) PForgeMap(width, height, tileWidth, tileHeight)',
+      doc: 'A 2D grid of tiles. Each tile is a sprite name string or nil.',
+      example: 'local m = PForgeMap.new(20, 15, 1, 1)' },
+    { label: 'PForgeSound', kind: 'class', insert: 'PForgeSound.new()',
+      detail: '(class) PForgeSound(channels, length, sampleRate)',
+      doc: 'Multi-channel audio buffer. Write samples manually.',
+      example: 'local s = PForgeSound.new(1, 44100, 44100)' }
+  ],
+
+  members: {
+    /* ================= screen ================= */
+    screen: [
+      /* properties */
+      { label: 'width',  kind: 'property', insert: 'width',  detail: '(property) screen.width: number',  doc: 'Visible screen width in units (readonly).' },
+      { label: 'height', kind: 'property', insert: 'height', detail: '(property) screen.height: number', doc: 'Visible screen height in units (readonly).' },
+
+      /* draw state */
+      { label: 'clear',           kind: 'function', insert: 'clear()',           detail: '(function) screen.clear(color?)',
+        doc: 'Clears the screen with a color.', example: 'screen.clear("#0f1115")' },
+      { label: 'setColor',        kind: 'function', insert: 'setColor()',        detail: '(function) screen.setColor(color)',
+        doc: 'Sets the current color used by fill/stroke.', example: 'screen.setColor("#4fa8d8")' },
+      { label: 'setAlpha',        kind: 'function', insert: 'setAlpha()',        detail: '(function) screen.setAlpha(alpha)', doc: '0.0 to 1.0.' },
+      { label: 'setBlending',     kind: 'function', insert: 'setBlending()',     detail: '(function) screen.setBlending(mode)',
+        doc: 'Modes: normal, additive, multiply, screen, overlay, darken, lighten, difference, exclusion, hue, saturation, color, luminosity.' },
+      { label: 'setFont',         kind: 'function', insert: 'setFont()',         detail: '(function) screen.setFont(font)',   doc: 'E.g. "Arial", "monospace".' },
+      { label: 'setPixelated',    kind: 'function', insert: 'setPixelated()',    detail: '(function) screen.setPixelated(p)', doc: 'Disable smoothing (pixel art).' },
+      { label: 'setLineWidth',    kind: 'function', insert: 'setLineWidth()',    detail: '(function) screen.setLineWidth(w)' },
+      { label: 'setLineDash',     kind: 'function', insert: 'setLineDash()',     detail: '(function) screen.setLineDash(d)',
+        doc: 'E.g. {0.1, 0.05}.' },
+      { label: 'setCursorVisible',kind: 'function', insert: 'setCursorVisible()',detail: '(function) screen.setCursorVisible(v)' },
+
+      /* transforms */
+      { label: 'setTranslation', kind: 'function', insert: 'setTranslation()', detail: '(function) screen.setTranslation(tx, ty)', doc: 'Moves the origin.' },
+      { label: 'setScale',       kind: 'function', insert: 'setScale()',       detail: '(function) screen.setScale(sx, sy)',       doc: 'Global scale.' },
+      { label: 'setRotation',    kind: 'function', insert: 'setRotation()',    detail: '(function) screen.setRotation(radians)',   doc: 'Rotates everything.' },
+
+      /* shapes */
+      { label: 'fillRect',      kind: 'function', insert: 'fillRect()',      detail: '(function) screen.fillRect(x, y, w, h, color?)',              doc: '(x, y) is the center.' },
+      { label: 'drawRect',      kind: 'function', insert: 'drawRect()',      detail: '(function) screen.drawRect(x, y, w, h, color?)' },
+      { label: 'fillRound',     kind: 'function', insert: 'fillRound()',     detail: '(function) screen.fillRound(x, y, w, h, color?)',             doc: 'Filled ellipse.' },
+      { label: 'drawRound',     kind: 'function', insert: 'drawRound()',     detail: '(function) screen.drawRound(x, y, w, h, color?)',             doc: 'Outlined ellipse.' },
+      { label: 'fillRoundRect', kind: 'function', insert: 'fillRoundRect()', detail: '(function) screen.fillRoundRect(x, y, w, h, radius, color?)', doc: 'Rounded rectangle, filled.' },
+      { label: 'drawRoundRect', kind: 'function', insert: 'drawRoundRect()', detail: '(function) screen.drawRoundRect(x, y, w, h, radius, color?)' },
+      { label: 'drawLine',      kind: 'function', insert: 'drawLine()',      detail: '(function) screen.drawLine(x1, y1, x2, y2)' },
+      { label: 'drawArc',       kind: 'function', insert: 'drawArc()',       detail: '(function) screen.drawArc(x, y, r, a1, a2, ccw, color?)' },
+      { label: 'fillArc',       kind: 'function', insert: 'fillArc()',       detail: '(function) screen.fillArc(x, y, r, a1, a2, ccw, color?)' },
+
+      /* polygons */
+      { label: 'drawPolygon',  kind: 'function', insert: 'drawPolygon()',  detail: '(function) screen.drawPolygon(...coords)',
+        doc: 'Accepts (x1, y1, x2, y2, ...) or an array {x1, y1, x2, y2, ...}.' },
+      { label: 'drawPolyline', kind: 'function', insert: 'drawPolyline()', detail: '(function) screen.drawPolyline(...coords)' },
+      { label: 'fillPolygon',  kind: 'function', insert: 'fillPolygon()',  detail: '(function) screen.fillPolygon(...coords)' },
+
+      /* text */
+      { label: 'drawText',        kind: 'function', insert: 'drawText()',        detail: '(function) screen.drawText(text, x, y, size, color?)',        doc: 'size is in units — 0.2 = 20 pixels.' },
+      { label: 'drawTextOutline', kind: 'function', insert: 'drawTextOutline()', detail: '(function) screen.drawTextOutline(text, x, y, size, color?)' },
+      { label: 'textWidth',       kind: 'function', insert: 'textWidth()',       detail: '(function) screen.textWidth(text, size): number' },
+
+      /* gradients */
+      { label: 'setLinearGradient', kind: 'function', insert: 'setLinearGradient()', detail: '(function) screen.setLinearGradient(x1, y1, x2, y2, c1, c2)',
+        doc: 'After setting a gradient, use fillRect/fillRound/etc. as usual.' },
+      { label: 'setRadialGradient', kind: 'function', insert: 'setRadialGradient()', detail: '(function) screen.setRadialGradient(x, y, radius, c1, c2)' },
+
+      /* sprites / images / maps */
+      { label: 'drawSprite',     kind: 'function', insert: 'drawSprite()',     detail: '(function) screen.drawSprite(name, x, y, w, h?)',                doc: 'name is a key in the sprites registry.' },
+      { label: 'drawSpritePart', kind: 'function', insert: 'drawSpritePart()', detail: '(function) screen.drawSpritePart(name, px, py, pw, ph, x, y, w, h?)' },
+      { label: 'drawImage',      kind: 'function', insert: 'drawImage()',      detail: '(function) screen.drawImage(image, x, y, w, h?)' },
+      { label: 'drawImagePart',  kind: 'function', insert: 'drawImagePart()',  detail: '(function) screen.drawImagePart(image, px, py, pw, ph, x, y, w, h?)' },
+      { label: 'drawMap',        kind: 'function', insert: 'drawMap()',        detail: '(function) screen.drawMap(name, x, y, w, h?)',                   doc: 'name is a key in the maps registry.' }
+    ],
+
+    /* ================= keyboard ================= */
+    keyboard: [
+      { label: 'A',  kind: 'property', insert: 'A',  detail: '(property) keyboard.A: number',  doc: '1 if A is held, 0 otherwise.' },
+      { label: 'W',  kind: 'property', insert: 'W',  detail: '(property) keyboard.W: number' },
+      { label: 'S',  kind: 'property', insert: 'S',  detail: '(property) keyboard.S: number' },
+      { label: 'D',  kind: 'property', insert: 'D',  detail: '(property) keyboard.D: number' },
+      { label: 'SPACE',     kind: 'property', insert: 'SPACE',     detail: '(property) keyboard.SPACE' },
+      { label: 'ENTER',     kind: 'property', insert: 'ENTER',     detail: '(property) keyboard.ENTER' },
+      { label: 'SHIFT',     kind: 'property', insert: 'SHIFT',     detail: '(property) keyboard.SHIFT' },
+      { label: 'CTRL',      kind: 'property', insert: 'CTRL',      detail: '(property) keyboard.CTRL' },
+      { label: 'ALT',       kind: 'property', insert: 'ALT',       detail: '(property) keyboard.ALT' },
+      { label: 'ESCAPE',    kind: 'property', insert: 'ESCAPE',    detail: '(property) keyboard.ESCAPE' },
+      { label: 'TAB',       kind: 'property', insert: 'TAB',       detail: '(property) keyboard.TAB' },
+      { label: 'BACKSPACE', kind: 'property', insert: 'BACKSPACE', detail: '(property) keyboard.BACKSPACE' },
+      { label: 'LEFT',      kind: 'property', insert: 'LEFT',      detail: '(property) keyboard.LEFT' },
+      { label: 'RIGHT',     kind: 'property', insert: 'RIGHT',     detail: '(property) keyboard.RIGHT' },
+      { label: 'UP',        kind: 'property', insert: 'UP',        detail: '(property) keyboard.UP' },
+      { label: 'DOWN',      kind: 'property', insert: 'DOWN',      detail: '(property) keyboard.DOWN' },
+      { label: 'press',   kind: 'property', insert: 'press',   detail: '(property) keyboard.press',
+        doc: '1 only on the frame the key was pressed. Use keyboard.press.X.' },
+      { label: 'release', kind: 'property', insert: 'release', detail: '(property) keyboard.release',
+        doc: '1 only on the frame the key was released. Use keyboard.release.X.' }
+    ],
+
+    /* nested keyboard.press / keyboard.release */
+    'keyboard.press': [
+      { label: 'A', kind: 'property', insert: 'A', detail: '(property) keyboard.press.A' },
+      { label: 'W', kind: 'property', insert: 'W', detail: '(property) keyboard.press.W' },
+      { label: 'S', kind: 'property', insert: 'S', detail: '(property) keyboard.press.S' },
+      { label: 'D', kind: 'property', insert: 'D', detail: '(property) keyboard.press.D' },
+      { label: 'SPACE',  kind: 'property', insert: 'SPACE',  detail: '(property) keyboard.press.SPACE' },
+      { label: 'ENTER',  kind: 'property', insert: 'ENTER',  detail: '(property) keyboard.press.ENTER' },
+      { label: 'SHIFT',  kind: 'property', insert: 'SHIFT',  detail: '(property) keyboard.press.SHIFT' },
+      { label: 'CTRL',   kind: 'property', insert: 'CTRL',   detail: '(property) keyboard.press.CTRL' },
+      { label: 'ALT',    kind: 'property', insert: 'ALT',    detail: '(property) keyboard.press.ALT' },
+      { label: 'ESCAPE', kind: 'property', insert: 'ESCAPE', detail: '(property) keyboard.press.ESCAPE' },
+      { label: 'UP',     kind: 'property', insert: 'UP',     detail: '(property) keyboard.press.UP' },
+      { label: 'DOWN',   kind: 'property', insert: 'DOWN',   detail: '(property) keyboard.press.DOWN' },
+      { label: 'LEFT',   kind: 'property', insert: 'LEFT',   detail: '(property) keyboard.press.LEFT' },
+      { label: 'RIGHT',  kind: 'property', insert: 'RIGHT',  detail: '(property) keyboard.press.RIGHT' }
+    ],
+    'keyboard.release': [
+      { label: 'A', kind: 'property', insert: 'A', detail: '(property) keyboard.release.A' },
+      { label: 'W', kind: 'property', insert: 'W', detail: '(property) keyboard.release.W' },
+      { label: 'S', kind: 'property', insert: 'S', detail: '(property) keyboard.release.S' },
+      { label: 'D', kind: 'property', insert: 'D', detail: '(property) keyboard.release.D' },
+      { label: 'SPACE',  kind: 'property', insert: 'SPACE',  detail: '(property) keyboard.release.SPACE' },
+      { label: 'ENTER',  kind: 'property', insert: 'ENTER',  detail: '(property) keyboard.release.ENTER' },
+      { label: 'SHIFT',  kind: 'property', insert: 'SHIFT',  detail: '(property) keyboard.release.SHIFT' },
+      { label: 'CTRL',   kind: 'property', insert: 'CTRL',   detail: '(property) keyboard.release.CTRL' },
+      { label: 'ALT',    kind: 'property', insert: 'ALT',    detail: '(property) keyboard.release.ALT' },
+      { label: 'ESCAPE', kind: 'property', insert: 'ESCAPE', detail: '(property) keyboard.release.ESCAPE' },
+      { label: 'UP',     kind: 'property', insert: 'UP',     detail: '(property) keyboard.release.UP' },
+      { label: 'DOWN',   kind: 'property', insert: 'DOWN',   detail: '(property) keyboard.release.DOWN' },
+      { label: 'LEFT',   kind: 'property', insert: 'LEFT',   detail: '(property) keyboard.release.LEFT' },
+      { label: 'RIGHT',  kind: 'property', insert: 'RIGHT',  detail: '(property) keyboard.release.RIGHT' }
+    ],
+
+    /* ================= mouse ================= */
+    mouse: [
+      { label: 'x',       kind: 'property', insert: 'x',       detail: '(property) mouse.x: number',       doc: 'X position in units, origin at the screen center.' },
+      { label: 'y',       kind: 'property', insert: 'y',       detail: '(property) mouse.y: number',       doc: 'Y position in units, origin at the screen center.' },
+      { label: 'left',    kind: 'property', insert: 'left',    detail: '(property) mouse.left: number',    doc: '1 if the left button is held.' },
+      { label: 'middle',  kind: 'property', insert: 'middle',  detail: '(property) mouse.middle: number' },
+      { label: 'right',   kind: 'property', insert: 'right',   detail: '(property) mouse.right: number' },
+      { label: 'pressed', kind: 'property', insert: 'pressed', detail: '(property) mouse.pressed: number', doc: '1 if any button is held.' },
+      { label: 'press',   kind: 'property', insert: 'press',   detail: '(property) mouse.press: number',   doc: '1 only on the frame of the click.' },
+      { label: 'release', kind: 'property', insert: 'release', detail: '(property) mouse.release: number', doc: '1 only on the frame the button was released.' },
+      { label: 'wheel',   kind: 'property', insert: 'wheel',   detail: '(property) mouse.wheel: number',   doc: '1 (scroll up) or -1 (scroll down).' }
+    ],
+
+    /* ================= touch ================= */
+    touch: [
+      { label: 'touching', kind: 'property', insert: 'touching', detail: '(property) touch.touching: number', doc: '1 if there is an active touch.' },
+      { label: 'x',        kind: 'property', insert: 'x',        detail: '(property) touch.x: number',        doc: 'X position of the first touch.' },
+      { label: 'y',        kind: 'property', insert: 'y',        detail: '(property) touch.y: number',        doc: 'Y position of the first touch.' },
+      { label: 'press',    kind: 'property', insert: 'press',    detail: '(property) touch.press: number' },
+      { label: 'release',  kind: 'property', insert: 'release',  detail: '(property) touch.release: number' },
+      { label: 'touches',  kind: 'property', insert: 'touches',  detail: '(property) touch.touches: Touch[]',
+        doc: 'List of all active touches (native Touch objects).' }
+    ],
+
+    /* ================= gamepad ================= */
+    gamepad: [
+      { label: 'A',  kind: 'property', insert: 'A',  detail: '(property) gamepad.A: number',  doc: '0 or 1. Returns 0 when no controller is connected.' },
+      { label: 'B',  kind: 'property', insert: 'B',  detail: '(property) gamepad.B' },
+      { label: 'X',  kind: 'property', insert: 'X',  detail: '(property) gamepad.X' },
+      { label: 'Y',  kind: 'property', insert: 'Y',  detail: '(property) gamepad.Y' },
+      { label: 'LB', kind: 'property', insert: 'LB', detail: '(property) gamepad.LB' },
+      { label: 'RB', kind: 'property', insert: 'RB', detail: '(property) gamepad.RB' },
+      { label: 'LT', kind: 'property', insert: 'LT', detail: '(property) gamepad.LT' },
+      { label: 'RT', kind: 'property', insert: 'RT', detail: '(property) gamepad.RT' }
+    ],
+
+    /* ================= system ================= */
+    system: [
+      { label: 'time',        kind: 'function', insert: 'time()',        detail: '(function) system.time(): number',   doc: 'Timestamp in milliseconds.' },
+      { label: 'language',    kind: 'property', insert: 'language',      detail: '(property) system.language: string', doc: 'E.g. "pt-BR".' },
+      { label: 'update_rate', kind: 'property', insert: 'update_rate',   detail: '(property) system.update_rate: number', doc: 'Target FPS (60).' },
+      { label: 'inputs',      kind: 'property', insert: 'inputs',        detail: '(property) system.inputs',
+        doc: 'Sub-object with keyboard, mouse, touch and gamepad availability flags.' },
+      { label: 'prompt', kind: 'function', insert: 'prompt()', detail: '(function) system.prompt(text, callback)',
+        doc: 'Native text input box.' },
+      { label: 'say',    kind: 'function', insert: 'say()',    detail: '(function) system.say(text)',
+        doc: 'Native alert.' },
+      { label: 'pause',  kind: 'function', insert: 'pause()',  detail: '(function) system.pause()' },
+      { label: 'exit',   kind: 'function', insert: 'exit()',   detail: '(function) system.exit()' },
+      { label: 'file',   kind: 'property', insert: 'file',     detail: '(property) system.file',
+        doc: 'Sub-object with save, load, loaded and dropped.' }
+    ],
+    'system.inputs': [
+      { label: 'keyboard', kind: 'property', insert: 'keyboard', detail: '(property) system.inputs.keyboard: number', doc: '1 if a keyboard is available.' },
+      { label: 'mouse',    kind: 'property', insert: 'mouse',    detail: '(property) system.inputs.mouse: number' },
+      { label: 'touch',    kind: 'property', insert: 'touch',    detail: '(property) system.inputs.touch: number' },
+      { label: 'gamepad',  kind: 'property', insert: 'gamepad',  detail: '(property) system.inputs.gamepad: number' }
+    ],
+    'system.file': [
+      { label: 'save',    kind: 'function', insert: 'save()',    detail: '(function) system.file.save(obj, name, format?, quality?)',
+        doc: 'Saves an object as JSON, or a PForgeImage as PNG.',
+        example: 'system.file.save(img, "sprite", "png")\nsystem.file.save({ level = 1, score = 100 }, "save")' },
+      { label: 'load',    kind: 'function', insert: 'load()',    detail: '(function) system.file.load(types, callback)' },
+      { label: 'loaded',  kind: 'property', insert: 'loaded',    detail: '(property) system.file.loaded' },
+      { label: 'dropped', kind: 'property', insert: 'dropped',   detail: '(property) system.file.dropped' }
+    ],
+
+    /* ================= storage ================= */
+    storage: [
+      { label: 'set', kind: 'function', insert: 'set()', detail: '(function) storage.set(name, value)',
+        doc: 'Stores a value by name. Values are serialized with JSON.stringify.',
+        example: 'storage.set("highscore", 100)' },
+      { label: 'get', kind: 'function', insert: 'get()', detail: '(function) storage.get(name, defaultValue?): any',
+        doc: 'Reads a stored value by name.',
+        example: 'local hi = storage.get("highscore", 0)' }
+    ],
+
+    /* ================= audio ================= */
+    audio: [
+      { label: 'beep', kind: 'function', insert: 'beep()', detail: '(function) audio.beep(sequence)',
+        doc: 'Plays a sequence of notes as "NOTE OCTAVE". Notes: C, D, E, F, G, A, B. Accidentals: C#4, Bb4. Octaves -1 to 9. Also supports "tempo N" (BPM, default 240) and "volume N" (0-100, default 30).',
+        example: 'audio.beep("C4 E4 G4 C5")\naudio.beep("tempo 120 volume 50 C4 D4 E4")' },
+      { label: 'playSound', kind: 'function', insert: 'playSound()', detail: '(function) audio.playSound(name)',
+        doc: 'Plays a sound registered in the sounds registry. Returns a handle with setVolume and stop.',
+        example: 'local s = audio.playSound("explosion")\ns.setVolume(0.5)\ns.stop()' },
+      { label: 'playMusic', kind: 'function', insert: 'playMusic()', detail: '(function) audio.playMusic(name)',
+        doc: 'Plays a sound registered in the music registry.' }
+    ],
+
+    /* ================= asset_manager ================= */
+    asset_manager: [
+      { label: 'loadImage',    kind: 'function', insert: 'loadImage()',    detail: '(function) asset_manager.loadImage(path, callback)',
+        example: 'asset_manager.loadImage("logo.png", function(img)\n  logo = img\nend)' },
+      { label: 'loadJSON',     kind: 'function', insert: 'loadJSON()',     detail: '(function) asset_manager.loadJSON(path, callback)' },
+      { label: 'loadText',     kind: 'function', insert: 'loadText()',     detail: '(function) asset_manager.loadText(path, callback)' },
+      { label: 'loadCSV',      kind: 'function', insert: 'loadCSV()',      detail: '(function) asset_manager.loadCSV(path, callback)' },
+      { label: 'loadMarkdown', kind: 'function', insert: 'loadMarkdown()', detail: '(function) asset_manager.loadMarkdown(path, callback)' },
+      { label: 'loadFont',     kind: 'function', insert: 'loadFont()',     detail: '(function) asset_manager.loadFont(path)' },
+      { label: 'loadModel',    kind: 'function', insert: 'loadModel()',    detail: '(function) asset_manager.loadModel(path, scene, callback)' },
+      { label: 'wasmInstance', kind: 'function', insert: 'wasmInstance()', detail: '(function) asset_manager.wasmInstance(path, callback)' }
+    ],
+
+    /* ================= gfx3d ================= */
+    gfx3d: [
+      { label: 'init', kind: 'function', insert: 'init()', detail: '(function) gfx3d.init(opts)',
+        doc: 'Required before any other gfx3d call.',
+        example: 'gfx3d.init({ background = 0x0f1115, fov = 70, near = 0.1, far = 1000 })' },
+      { label: 'addLight', kind: 'function', insert: 'addLight()', detail: '(function) gfx3d.addLight(type, opts)',
+        doc: 'Types: "ambient", "directional", "point", "hemisphere".',
+        example: 'gfx3d.addLight("ambient",     { color = 0xffffff, intensity = 0.6 })\ngfx3d.addLight("directional", { color = 0xffffff, intensity = 0.8, position = {5, 10, 7} })' },
+      { label: 'addBox',      kind: 'function', insert: 'addBox()',      detail: '(function) gfx3d.addBox(name, opts)',
+        example: 'gfx3d.addBox("cube", { size = {1, 1, 1}, color = 0x4fa8d8, position = {0, 0, 0} })' },
+      { label: 'addSphere',   kind: 'function', insert: 'addSphere()',   detail: '(function) gfx3d.addSphere(name, opts)' },
+      { label: 'addPlane',    kind: 'function', insert: 'addPlane()',    detail: '(function) gfx3d.addPlane(name, opts)' },
+      { label: 'addCylinder', kind: 'function', insert: 'addCylinder()', detail: '(function) gfx3d.addCylinder(name, opts)' },
+      { label: 'addCone',     kind: 'function', insert: 'addCone()',     detail: '(function) gfx3d.addCone(name, opts)' },
+      { label: 'addTorus',    kind: 'function', insert: 'addTorus()',    detail: '(function) gfx3d.addTorus(name, opts)' },
+      { label: 'get',         kind: 'function', insert: 'get()',         detail: '(function) gfx3d.get(name): Object3D' },
+      { label: 'remove',      kind: 'function', insert: 'remove()',      detail: '(function) gfx3d.remove(name)' },
+      { label: 'setPosition', kind: 'function', insert: 'setPosition()', detail: '(function) gfx3d.setPosition(name, x, y, z)' },
+      { label: 'translate',   kind: 'function', insert: 'translate()',   detail: '(function) gfx3d.translate(name, dx, dy, dz)' },
+      { label: 'rotate',      kind: 'function', insert: 'rotate()',      detail: '(function) gfx3d.rotate(name, rx, ry, rz)' },
+      { label: 'setColor',    kind: 'function', insert: 'setColor()',    detail: '(function) gfx3d.setColor(name, hexColor)' },
+      { label: 'setCamera',   kind: 'function', insert: 'setCamera()',   detail: '(function) gfx3d.setCamera(opts)',
+        example: 'gfx3d.setCamera({ position = {0, 3, 8}, lookAt = {0, 0, 0}, fov = 70 })' },
+      { label: 'moveCamera',  kind: 'function', insert: 'moveCamera()',  detail: '(function) gfx3d.moveCamera(dx, dy, dz)' },
+      { label: 'render',      kind: 'function', insert: 'render()',      detail: '(function) gfx3d.render()',          doc: 'Draws the scene.' },
+      { label: 'getDelta',    kind: 'function', insert: 'getDelta()',    detail: '(function) gfx3d.getDelta(): number', doc: 'Three.js Clock delta time.' }
+    ],
+
+    /* ================= PForgeImage (instance methods) ================= */
+    PForgeImage: [
+      /* pixels */
+      { label: 'setRGB',  kind: 'function', insert: 'setRGB()',  detail: '(function) img:setRGB(x, y, r, g, b)' },
+      { label: 'setRGBA', kind: 'function', insert: 'setRGBA()', detail: '(function) img:setRGBA(x, y, r, g, b, a)' },
+      { label: 'getRGB',  kind: 'function', insert: 'getRGB()',  detail: '(function) img:getRGB(x, y, result?)' },
+      { label: 'getRGBA', kind: 'function', insert: 'getRGBA()', detail: '(function) img:getRGBA(x, y, result?)' },
+
+      /* draw state */
+      { label: 'clear',        kind: 'function', insert: 'clear()',        detail: '(function) img:clear(color?)' },
+      { label: 'setColor',     kind: 'function', insert: 'setColor()',     detail: '(function) img:setColor(c)' },
+      { label: 'setAlpha',     kind: 'function', insert: 'setAlpha()',     detail: '(function) img:setAlpha(a)' },
+      { label: 'setBlending',  kind: 'function', insert: 'setBlending()',  detail: '(function) img:setBlending(b)' },
+      { label: 'setFont',      kind: 'function', insert: 'setFont()',      detail: '(function) img:setFont(f)' },
+      { label: 'setPixelated', kind: 'function', insert: 'setPixelated()', detail: '(function) img:setPixelated(p)' },
+      { label: 'setLineWidth', kind: 'function', insert: 'setLineWidth()', detail: '(function) img:setLineWidth(w)' },
+      { label: 'setLineDash',  kind: 'function', insert: 'setLineDash()',  detail: '(function) img:setLineDash(d)' },
+
+      /* shapes */
+      { label: 'fillRect',      kind: 'function', insert: 'fillRect()',      detail: '(function) img:fillRect(x, y, w, h, color?)' },
+      { label: 'drawRect',      kind: 'function', insert: 'drawRect()',      detail: '(function) img:drawRect(x, y, w, h, color?)' },
+      { label: 'fillRound',     kind: 'function', insert: 'fillRound()',     detail: '(function) img:fillRound(x, y, w, h, color?)' },
+      { label: 'drawRound',     kind: 'function', insert: 'drawRound()',     detail: '(function) img:drawRound(x, y, w, h, color?)' },
+      { label: 'fillRoundRect', kind: 'function', insert: 'fillRoundRect()', detail: '(function) img:fillRoundRect(x, y, w, h, r, color?)' },
+      { label: 'drawRoundRect', kind: 'function', insert: 'drawRoundRect()', detail: '(function) img:drawRoundRect(x, y, w, h, r, color?)' },
+      { label: 'drawLine',      kind: 'function', insert: 'drawLine()',      detail: '(function) img:drawLine(x1, y1, x2, y2)' },
+
+      /* sprites / images */
+      { label: 'drawSprite', kind: 'function', insert: 'drawSprite()', detail: '(function) img:drawSprite(name, x, y, w, h?)' },
+      { label: 'drawImage',  kind: 'function', insert: 'drawImage()',  detail: '(function) img:drawImage(image, x, y, w, h?)' },
+
+      /* text */
+      { label: 'drawText',        kind: 'function', insert: 'drawText()',        detail: '(function) img:drawText(text, x, y, size, color?)' },
+      { label: 'drawTextOutline', kind: 'function', insert: 'drawTextOutline()', detail: '(function) img:drawTextOutline(text, x, y, size, color?)' },
+      { label: 'textWidth',       kind: 'function', insert: 'textWidth()',       detail: '(function) img:textWidth(text, size): number' }
+    ],
+
+    /* ================= PForgeSprite ================= */
+    PForgeSprite: [
+      { label: 'setFPS',   kind: 'function', insert: 'setFPS()',   detail: '(function) sprite:setFPS(fps)',
+        doc: 'Configures the frame rate.' },
+      { label: 'setFrame', kind: 'function', insert: 'setFrame()', detail: '(function) sprite:setFrame(index)',
+        doc: 'Manually selects the current frame. There is no play/loop yet.',
+        example: 'frame = frame + dt * 8\nsprites["player"]:setFrame(math.floor(frame) % 4)' }
+    ],
+
+    /* ================= PForgeMap ================= */
+    PForgeMap: [
+      { label: 'set', kind: 'function', insert: 'set()', detail: '(function) map:set(x, y, tile)',
+        doc: 'tile is a sprite name string or nil.' },
+      { label: 'get', kind: 'function', insert: 'get()', detail: '(function) map:get(x, y)' }
+    ],
+
+    /* ================= PForgeSound ================= */
+    PForgeSound: [
+      { label: 'write', kind: 'function', insert: 'write()', detail: '(function) sound:write(channel, index, value)',
+        doc: 'value is between -1.0 and 1.0.' },
+      { label: 'read',  kind: 'function', insert: 'read()',  detail: '(function) sound:read(channel, index): number' },
+      { label: 'play',  kind: 'function', insert: 'play()',  detail: '(function) sound:play(volume?, pitch?, pan?, loop?)',
+        doc: 'Note: in the current runtime this is a stub. Use audio.beep for real sound.' }
+    ]
+  }
+};
+
+/* ============================================================
+   1. STATE
+   ============================================================ */
+let editor = null;
+let monacoModel = null;
+let monacoReady = false;
+
+let textVersion = 0;
+
+let caretOffset = 0;
+let lastSel = { start: 0, end: 0 };
+
+let hasDocsContent = true;
+let acOpen = false, acItems = [], acIndex = 0, acStart = 0, acPrefix = '';
+let acRequestId = 0, acRefreshTimer = null;
+let acStringMode = false, acStringInfo = null;
+let acPointerDown = false;
+
+const ITEM_HEIGHT       = 19;
+const DEFAULT_MAX_ITEMS = 12;
+const MIN_LIST_WIDTH    = 200;
+const MIN_DOCS_WIDTH    = 260;
+const MIN_MAX_HEIGHT    = ITEM_HEIGHT;
+const WIDGET_MARGIN     = 6;
+
+let userListWidth = 430;
+let userDocsWidth = 460;
+let userMaxHeight = DEFAULT_MAX_ITEMS * ITEM_HEIGHT;
+let curListW = 430, curDocsW = 460, lastListH = 0;
+
+let stringWordsCache = null, stringWordsCacheVersion = -1;
+let localsCache = null, localsCacheVersion = -1;
+
+/* ============================================================
+   2. UI / UTILITIES
+   ============================================================ */
+const cursorPosEl = document.getElementById('cursorPos');
+const tsStatusEl  = document.getElementById('tsStatus');
+const setStatus   = (t) => { if (tsStatusEl) tsStatusEl.textContent = t; };
+
+const acWidget    = document.getElementById('acWidget');
+const acListEl    = document.getElementById('acList');
+const acDocsEl    = document.getElementById('acDocs');
+const acListPane  = document.getElementById('acListPane');
+const eHandle     = document.querySelector('.ac-resize-e');
+const docsEHandle = document.querySelector('.ac-resize-docs-e');
+const sHandle     = document.querySelector('.ac-resize-s');
+const seHandle    = document.querySelector('.ac-resize-se');
+
+function escapeHtml(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/* ============================================================
+   3. THEME + MONARCH
+   ============================================================ */
+function defineCustomTheme() {
+  monaco.editor.defineTheme('pforge-dark', {
+    base: 'vs-dark',
+    inherit: false,
+    rules: [
+      { token: '',                     foreground: 'd4d4d4', background: '1a1a1a' },
+      { token: 'identifier',           foreground: 'd4d4d4' },
+      { token: 'keyword',              foreground: 'EE6D72', fontStyle: 'bold' },
+      { token: 'function',             foreground: '7990ff' },
+      { token: 'namespace',            foreground: '5CB0D7' },
+      { token: 'string',               foreground: '6FD39B' },
+      { token: 'string.escape',        foreground: '6FD39B' },
+      { token: 'string.invalid',       foreground: 'f44747' },
+      { token: 'comment',              foreground: '8a8a8a', fontStyle: 'italic' },
+      { token: 'number',               foreground: 'ffff00', fontStyle: 'bold' },
+      { token: 'number.hex',           foreground: 'ffff00', fontStyle: 'bold' },
+      { token: 'number.binary',        foreground: 'ffff00', fontStyle: 'bold' },
+      { token: 'constant',             foreground: 'ffff00', fontStyle: 'bold' },
+      { token: 'operator',             foreground: 'd4d4d4' },
+      { token: 'delimiter',            foreground: 'd4d4d4' },
+      { token: 'delimiter.parenthesis',foreground: 'ffd700' },
+      { token: 'delimiter.square',     foreground: 'ffd700' },
+      { token: 'delimiter.curly',      foreground: 'da70d6' },
+    ],
+    colors: {
+      'editor.background':                    '#1a1a1a',
+      'editor.foreground':                    '#d4d4d4',
+      'editorGutter.background':              '#2a2a2a',
+      'editorLineNumber.foreground':          '#858585',
+      'editorLineNumber.activeForeground':    '#c6c6c6',
+      'editor.lineHighlightBackground':       '#ffffff0a',
+      'editor.lineHighlightBorder':           '#00000000',
+      'editor.selectionBackground':           '#264f7899',
+      'editor.inactiveSelectionBackground':   '#3a3d41',
+      'editor.selectionHighlightBackground':  '#add6ff26',
+      'editorCursor.foreground':              '#aeafad',
+      'editorIndentGuide.background1':        '#3a3a3a',
+      'editorIndentGuide.activeBackground1':  '#5a5a5a',
+      'editorBracketMatch.background':        '#00000000',
+      'editorBracketMatch.border':            '#9f9f9f',
+      'scrollbarSlider.background':           '#4a4a4a80',
+      'scrollbarSlider.hoverBackground':      '#5a5a5a80',
+      'scrollbarSlider.activeBackground':     '#5a5a5acc',
+      'scrollbar.shadow':                     '#00000000',
+    }
+  });
+}
+
+function registerLuauMonarch() {
+  monaco.languages.setMonarchTokensProvider('lua', {
+    defaultToken: '',
+    tokenPostfix: '.luau',
+
+    brackets: [
+      { open: '{', close: '}', token: 'delimiter.curly' },
+      { open: '[', close: ']', token: 'delimiter.square' },
+      { open: '(', close: ')', token: 'delimiter.parenthesis' }
+    ],
+
+    keywords: [
+      'and', 'break', 'continue', 'do', 'else', 'elseif', 'end',
+      'for', 'function', 'if', 'in', 'local', 'not', 'or',
+      'repeat', 'return', 'then', 'until', 'while', 'self'
+    ],
+
+    constants: ['true', 'false', 'nil'],
+
+    builtinFunctions: [
+      'print', 'warn', 'error', 'assert', 'type', 'typeof', 'tostring', 'tonumber',
+      'pairs', 'ipairs', 'next', 'select', 'pcall', 'xpcall',
+      'setmetatable', 'getmetatable', 'rawget', 'rawset',
+      'onInit', 'onUpdate', 'onDraw',
+      'require'
+    ],
+
+    builtinModules: [
+      'math', 'string', 'table', 'os', 'coroutine', 'bit32', 'utf8',
+      'screen', 'gfx3d', 'keyboard', 'mouse', 'touch', 'gamepad',
+      'system', 'storage', 'audio', 'asset_manager', 'three',
+      'random', 'sprites', 'maps', 'sounds', 'music'
+    ],
+
+    tokenizer: {
+      root: [
+        [/--\[\[/, 'comment', '@long_comment'],
+        [/--\[=*\[/, { token: 'comment', next: '@long_comment_eq' }],
+        [/--.*$/, 'comment'],
+
+        [/\[\[/, 'string', '@long_string'],
+        [/\[=*\[/, 'string', '@long_string_eq'],
+
+        [/"([^"\\]|\\.)*$/, 'string.invalid'],
+        [/'([^'\\]|\\.)*$/, 'string.invalid'],
+        [/"/, 'string', '@string_double'],
+        [/'/, 'string', '@string_single'],
+
+        [/0[xX][0-9a-fA-F]+/, 'number.hex'],
+        [/0[bB][01]+/, 'number.binary'],
+        [/\d+(\.\d+)?([eE][+\-]?\d+)?/, 'number'],
+
+        [/[a-zA-Z_][\w]*/, {
+          cases: {
+            '@keywords':         'keyword',
+            '@constants':        'constant',
+            '@builtinFunctions': 'function',
+            '@builtinModules':   'namespace',
+            '@default':          'identifier'
+          }
+        }],
+
+        [/[{}]/,   'delimiter.curly'],
+        [/[\[\]]/, 'delimiter.square'],
+        [/[()]/,   'delimiter.parenthesis'],
+
+        [/\.\.\.|\.\.|==|~=|<=|>=|\/\/|[+\-*\/%^#<>=~]=?/, 'operator'],
+        [/[;,.]/, 'delimiter'],
+      ],
+
+      string_double: [
+        [/[^\\"]+/, 'string'],
+        [/\\./,     'string.escape'],
+        [/"/,       'string', '@pop']
+      ],
+      string_single: [
+        [/[^\\']+/, 'string'],
+        [/\\./,     'string.escape'],
+        [/'/,       'string', '@pop']
+      ],
+      long_string: [
+        [/[^\]]+/, 'string'],
+        [/\]\]/,   'string', '@pop'],
+        [/\]/,     'string']
+      ],
+      long_string_eq: [
+        [/[^\]]+/, 'string'],
+        [/\]=\+\]/, 'string', '@pop'],
+        [/\]/,     'string']
+      ],
+      long_comment: [
+        [/[^\]]+/, 'comment'],
+        [/\]\]/,   'comment', '@pop'],
+        [/\]/,     'comment']
+      ],
+      long_comment_eq: [
+        [/[^\]]+/, 'comment'],
+        [/\]=\+\]/, 'comment', '@pop'],
+        [/\]/,     'comment']
+      ]
+    }
+  });
+
+  monaco.languages.setLanguageConfiguration('lua', {
+    comments: { lineComment: '--' },
+    brackets: [['{','}'],['[',']'],['(',')']],
+    autoClosingPairs: [
+      { open: '{', close: '}' },
+      { open: '[', close: ']' },
+      { open: '(', close: ')' },
+      { open: '"', close: '"' },
+      { open: "'", close: "'" }
+    ],
+    surroundingPairs: [
+      { open: '{', close: '}' },
+      { open: '[', close: ']' },
+      { open: '(', close: ')' },
+      { open: '"', close: '"' },
+      { open: "'", close: "'" }
+    ],
+    indentationRules: {
+      increaseIndentPattern: /^\s*(function|if|for|while|repeat|do)\b.*[^\s]*\s*$/,
+      decreaseIndentPattern: /^\s*(end|else|elseif|until)\b/
+    }
+  });
+}
+
+/* ============================================================
+   4. MODEL HELPERS
+   ============================================================ */
+function offsetToPosition(offset) { return monacoModel.getPositionAt(offset); }
+function positionToOffset(pos)    { return monacoModel.getOffsetAt(pos); }
+function currentText()            { return monacoModel.getValue(); }
+
+/* ============================================================
+   5. LOCAL SCAN (variables/functions declared in the script)
+   ============================================================ */
+function collectLocals() {
+  if (localsCacheVersion === textVersion && localsCache) return localsCache;
+  const t = currentText();
+  const map = new Map(); // name -> { kind: 'variable' | 'function' | 'parameter', line: number }
+  const lineOf = (idx) => monacoModel.getPositionAt(idx).lineNumber;
+
+  let re, m;
+  re = /\blocal\s+function\s+([A-Za-z_]\w*)/g;
+  while ((m = re.exec(t))) map.set(m[1], { kind: 'function', line: lineOf(m.index) });
+
+  re = /\blocal\s+([A-Za-z_]\w*)/g;
+  while ((m = re.exec(t))) {
+    if (!map.has(m[1])) map.set(m[1], { kind: 'variable', line: lineOf(m.index) });
+  }
+
+  re = /(?:^|[^\w.:])function\s+([A-Za-z_]\w*)\s*\(/g;
+  while ((m = re.exec(t))) map.set(m[1], { kind: 'function', line: lineOf(m.index) });
+
+  re = /(?:^|[^\w.:])([A-Za-z_]\w*)\s*=\s*function\s*\(/g;
+  while ((m = re.exec(t))) map.set(m[1], { kind: 'function', line: lineOf(m.index) });
+
+  re = /function\s*[\w.:]*\s*\(([^)]*)\)/g;
+  while ((m = re.exec(t))) {
+    const params = m[1].split(',');
+    const line = lineOf(m.index);
+    for (let p of params) {
+      p = p.trim();
+      if (!p || p === '...' || p === 'self') continue;
+      p = p.replace(/[:=].*$/, '').trim();
+      if (/^[A-Za-z_]\w*$/.test(p) && !map.has(p)) {
+        map.set(p, { kind: 'parameter', line });
+      }
+    }
+  }
+
+  localsCache = map;
+  localsCacheVersion = textVersion;
+  return map;
+}
+
+/* ============================================================
+   6. FILTERING / MATCH
+   ============================================================ */
+function rankEntry(entry, prefix) {
+  if (!prefix) return { rank: 0, matchIdx: -1 };
+  const label = entry.label;
+  const ll = label.toLowerCase();
+  const lp = prefix.toLowerCase();
+  if (label.startsWith(prefix))  return { rank: 0, matchIdx: 0 };
+  if (ll.startsWith(lp))         return { rank: 1, matchIdx: 0 };
+  const idx = ll.indexOf(lp);
+  if (idx !== -1)                return { rank: 2, matchIdx: idx };
+  return null;
+}
+
+function matchList(list, prefix) {
+  const out = [];
+  for (const it of list) {
+    const r = rankEntry(it, prefix);
+    if (!r) continue;
+    out.push(Object.assign({}, it, { _matchIdx: r.matchIdx, _rank: r.rank }));
+  }
+  out.sort((a, b) => a._rank - b._rank || a.label.length - b.label.length || a.label.localeCompare(b.label));
+  return out;
+}
+
+function globalCompletions(prefix, currentLine) {
+  const locals = collectLocals();
+  const list = [];
+  for (const it of LUAU_API.globals) list.push(it);
+  for (const [name, info] of locals) {
+    // Skip locals declared on the line the cursor is on — that is the very
+    // declaration the user is typing, so suggesting it back is just noise.
+    if (info.line === currentLine) continue;
+    list.push({
+      label: name,
+      kind: (info.kind === 'function' ? 'function' : 'variable'),
+      insert: name,
+      detail: '(' + (info.kind === 'parameter' ? 'parameter'
+                    : info.kind === 'function' ? 'local function'
+                    : 'local variable') + ') ' + name,
+      doc: 'Declared in this script.'
+    });
+  }
+  return matchList(list, prefix).slice(0, 500);
+}
+
+function memberCompletions(receiver, prefix) {
+  if (!receiver) return [];
+  const list = LUAU_API.members[receiver];
+  if (!list) return [];
+  return matchList(list, prefix).slice(0, 500);
+}
+
+/* ============================================================
+   7. WIDGET — render and docs
+   ============================================================ */
+function collectStringWords() {
+  const t = currentText();
+  if (stringWordsCacheVersion === textVersion) return stringWordsCache;
+  const words = new Set();
+  const re = /'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"/g;
+  let m;
+  while ((m = re.exec(t)) !== null) {
+    const inner = m[0].slice(1, -1);
+    const wordRe = /[\p{L}_$][\p{L}\p{N}_$]*/gu;
+    let w;
+    while ((w = wordRe.exec(inner)) !== null) {
+      if (w[0].length >= 2) words.add(w[0]);
+    }
+  }
+  stringWordsCache = [...words].sort((a, b) => a.localeCompare(b));
+  stringWordsCacheVersion = textVersion;
+  return stringWordsCache;
+}
+
+function renderAutocomplete() {
+  acListEl.innerHTML = acItems.map((item, i) => {
+    const meta = KIND_META[item.kind] || KIND_META.variable;
+    let labelHtml = escapeHtml(item.label);
+    const mi = item._matchIdx;
+    if (mi >= 0 && acPrefix.length) {
+      const before = escapeHtml(item.label.slice(0, mi));
+      const match  = escapeHtml(item.label.slice(mi, mi + acPrefix.length));
+      const after  = escapeHtml(item.label.slice(mi + acPrefix.length));
+      labelHtml = before + '<span class="ac-match">' + match + '</span>' + after;
+    }
+    const detailHtml = item.detail
+      ? '<span class="ac-detail">' + escapeHtml(item.detail) + '</span>'
+      : '<span class="ac-detail"></span>';
+    return '<div class="ac-item' + (i === acIndex ? ' focused' : '') + '" data-i="' + i + '">' +
+             '<span class="ac-icon-container">' +
+               '<i class="codicon ' + meta.codicon + ' ' + meta.cls + '"></i>' +
+             '</span>' +
+             '<span class="ac-text">' + labelHtml + '</span>' +
+             detailHtml +
+           '</div>';
+  }).join('');
+  updateWidgetSize();
+  updateSelectionUI(false);
+}
+
+function effectiveWidths() {
+  const avail = Math.max(120, window.innerWidth - 2 * WIDGET_MARGIN);
+  const listW = Math.min(userListWidth, avail);
+  const room = avail - listW + 1;
+  const docsW = window.innerWidth > 780 && room >= 220 ? Math.min(userDocsWidth, room) : 0;
+  return { listW, docsW };
+}
+
+function updateWidgetSize() {
+  const hideList = acStringMode && acItems.length === 0;
+  const w = effectiveWidths();
+  curListW = w.listW;
+  curDocsW = w.docsW;
+
+  acListPane.style.display = hideList ? 'none' : 'flex';
+  const hd = hideList ? 'none' : '';
+  eHandle.style.display = hd; sHandle.style.display = hd; seHandle.style.display = hd;
+
+  acListPane.style.width = curListW + 'px';
+  const showDocs = curDocsW && hasDocsContent;
+  if (showDocs) { acDocsEl.style.display = 'block'; acDocsEl.style.width = curDocsW + 'px'; }
+  else acDocsEl.style.display = 'none';
+
+  const listH = Math.min(acItems.length * ITEM_HEIGHT, userMaxHeight);
+  acListPane.style.height = listH + 'px';
+  lastListH = listH;
+  acDocsEl.style.maxHeight = Math.round(window.innerHeight * 0.6) + 'px';
+  acDocsEl.style.height = 'auto';
+  if (acWidget.style.display === 'flex') positionHandles();
+}
+
+function positionHandles() {
+  if (acStringMode && acItems.length === 0) return;
+  const listH = lastListH;
+  const docsVisible = acDocsEl.style.display !== 'none';
+  const docsH = docsVisible ? acDocsEl.offsetHeight : 0;
+  eHandle.style.left   = (curListW - eHandle.offsetWidth) + 'px';
+  eHandle.style.top    = '0';
+  eHandle.style.height = listH + 'px';
+  docsEHandle.style.display = (curDocsW && docsVisible) ? '' : 'none';
+  docsEHandle.style.right  = '0';
+  docsEHandle.style.top    = '0';
+  docsEHandle.style.height = docsH + 'px';
+  sHandle.style.left   = '0';
+  sHandle.style.top    = (listH - sHandle.offsetHeight) + 'px';
+  sHandle.style.width  = curListW + 'px';
+  seHandle.style.left = (curListW - seHandle.offsetWidth) + 'px';
+  seHandle.style.top  = (listH - seHandle.offsetHeight) + 'px';
+}
+
+function updateSelectionUI(scrollToSelected) {
+  const nodes = acListEl.querySelectorAll('.ac-item');
+  nodes.forEach((el, i) => el.classList.toggle('focused', i === acIndex));
+
+  if (acStringMode && acStringInfo) {
+    updateDocs(acStringInfo);
+  } else {
+    const item = acItems[acIndex];
+    if (!item) {
+      acDocsEl.innerHTML = '<div class="docs-empty">No description.</div>';
+      if (acWidget.style.display === 'flex') positionHandles();
+      return;
+    }
+    updateDocs(item);
+  }
+  if (scrollToSelected) {
+    const sel = nodes[acIndex];
+    if (sel) sel.scrollIntoView({ block: 'nearest' });
+  }
+}
+
+function updateDocs(item) {
+  const detailIsObject = item.detail && item.detail.trimStart().startsWith('{');
+  hasDocsContent = !!(item.doc || item.example || (item.detail && !detailIsObject));
+
+  if (!hasDocsContent) {
+    acDocsEl.innerHTML = '';
+    acDocsEl.style.display = 'none';
+    if (acWidget.style.display === 'flex') positionHandles();
+    return;
+  }
+
+  let html = '';
+  html += '<div class="docs-name" style="color:' + iconColor(item.kind) + '">' + escapeHtml(item.label) + '</div>';
+
+  if (item.doc) {
+    html += '<div class="docs-doc">' + escapeHtml(item.doc) + '</div>';
+  }
+
+  if (item.detail && !detailIsObject) {
+    const d = item.detail.length > 120 ? item.detail.slice(0, 120) + '…' : item.detail;
+    html += '<div class="docs-type">' + escapeHtml(d) + '</div>';
+  }
+
+  if (item.example) html += '<div class="docs-code">' + escapeHtml(item.example) + '</div>';
+  if (item._source) html += '<div class="docs-source">from <code>' + escapeHtml(item._source) + '</code></div>';
+
+  acDocsEl.innerHTML = html;
+  acDocsEl.style.display = 'block';                    // ← ESSA LINHA FALTOU
+  if (curDocsW) acDocsEl.style.width = curDocsW + 'px';
+  acDocsEl.scrollTop = 0;
+  if (acWidget.style.display === 'flex') positionHandles();
+}
+
+function iconColor(kind) {
+  switch (kind) {
+    case 'function': case 'method':   return '#b180d7';
+    case 'class':                     return '#ee9d28';
+    case 'interface':                 return '#75beff';
+    case 'type':                      return '#4ec9b0';
+    case 'variable':                  return '#75beff';
+    case 'property': case 'constant': return '#cccccc';
+    case 'namespace':                 return '#5CB0D7';
+    case 'string-word':               return '#ce9178';
+    case 'keyword':                   return '#cccccc';
+    default:                          return '#ffffff';
+  }
+}
+
+/* ============================================================
+   LSP → widget adapter
+   ============================================================ */
+function convertLspKind(k) {
+  // https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#completionItemKind
+  switch (k) {
+    case 2:  return 'method';      // Method
+    case 3:  return 'function';    // Function
+    case 4:  return 'function';    // Constructor
+    case 5:  return 'property';    // Field
+    case 6:  return 'variable';    // Variable
+    case 7:  return 'class';       // Class
+    case 8:  return 'interface';   // Interface
+    case 9:  return 'namespace';   // Module
+    case 10: return 'property';    // Property
+    case 11: return 'constant';    // Unit
+    case 12: return 'constant';    // Value
+    case 13: return 'class';       // Enum
+    case 14: return 'keyword';     // Keyword
+    case 15: return 'function';    // Snippet
+    case 16: return 'constant';    // Color
+    case 17: return 'variable';    // File
+    case 18: return 'variable';    // Reference
+    case 19: return 'class';       // Folder
+    case 20: return 'constant';    // EnumMember
+    case 21: return 'constant';    // Constant
+    case 22: return 'class';       // Struct
+    case 23: return 'property';    // Event
+    case 24: return 'keyword';     // Operator
+    case 25: return 'type';        // TypeParameter
+    default: return 'variable';
+  }
+}
+
+function extractCodeBlock(doc) {
+  if (!doc) return null;
+  const text = typeof doc === 'string' ? doc : (doc.value || '');
+  const m = text.match(/```(?:lua|luau)?\s*\n([\s\S]*?)```/);
+  return m ? m[1].trim() : null;
+}
+
+function stripCodeBlocks(doc) {
+  if (!doc) return '';
+  const text = typeof doc === 'string' ? doc : (doc.value || '');
+  return text.replace(/```[\s\S]*?```/g, '').trim();
+}
+
+function findInLuauApi(name, receiver) {
+  // 1) procura como membro (screen.clear, gfx3d.addBox)
+  if (receiver && LUAU_API.members[receiver]) {
+    for (const m of LUAU_API.members[receiver]) {
+      if (m.label === name) return m;
+    }
+  }
+  // 2) procura como global
+  for (const g of LUAU_API.globals) {
+    if (g.label === name) return g;
+  }
+  return null;
+}
+
+function convertLspItem(lsp, prefix, receiver) {
+  const label = lsp.label || lsp.filterText || '';
+  const lp = prefix.toLowerCase();
+  const ll = label.toLowerCase();
+  const matchIdx = prefix ? ll.indexOf(lp) : -1;
+
+  let insert = label;
+  if (lsp.textEdit) {
+    if (lsp.textEdit.newText !== undefined) insert = lsp.textEdit.newText;
+    else if (lsp.textEdit.replace !== undefined) insert = lsp.textEdit.replace;
+  } else if (lsp.insertText) {
+    insert = lsp.insertText;
+  }
+
+  if (lsp.insertTextFormat === 2) {
+    insert = insert.replace(/\$\{\d+:([^}]*)\}/g, '$1').replace(/\$\d+/g, '');
+  }
+
+  // Doc do LSP (se vier)
+  let doc = stripCodeBlocks(lsp.documentation);
+  let example = extractCodeBlock(lsp.documentation);
+
+  // Fallback: LUAU_API
+  if (!doc) {
+    const fb = findInLuauApi(label, receiver);
+    if (fb) {
+      if (!doc) doc = fb.doc || '';
+      if (!example) example = fb.example || '';
+    }
+  }
+
+  return {
+    label,
+    kind: convertLspKind(lsp.kind),
+    insert,
+    detail: lsp.detail || '',
+    doc,
+    example,
+    _matchIdx: matchIdx,
+    _rank: 0,
+    _lspItem: lsp
+  };
+}
+
+/* ============================================================
+   8. WIDGET POSITIONING
+   ============================================================ */
+function caretRect() {
+  const pos = editor.getPosition();
+  const rel = editor.getScrolledVisiblePosition(pos);
+  if (!rel) return { left: 0, top: 0, bottom: 0, right: 0, height: 21 };
+  const dom = editor.getDomNode().getBoundingClientRect();
+  const left = dom.left + rel.left;
+  const top  = dom.top  + rel.top;
+  return { left, right: left, top, bottom: top + rel.height, width: 0, height: rel.height };
+}
+
+function positionAutocomplete() {
+  const rect = caretRect();
+  acWidget.style.display = 'flex';
+  positionHandles();
+
+  const margin = WIDGET_MARGIN;
+  const w = acWidget.offsetWidth;
+  const h = acWidget.offsetHeight;
+  let left = rect.left;
+  if (left + w > window.innerWidth - margin) left = window.innerWidth - w - margin;
+  if (left < margin) left = margin;
+  let top = rect.bottom + 4;
+  if (top + h > window.innerHeight - margin) {
+    top = rect.top - h - 4;
+    if (top < margin) top = margin;
+  }
+  acWidget.style.left = left + 'px';
+  acWidget.style.top  = top + 'px';
+}
+
+function hideAutocomplete() {
+  if (acRefreshTimer) { clearTimeout(acRefreshTimer); acRefreshTimer = null; }
+  acRequestId++;
+  if (!acOpen) return;
+  acOpen = false;
+  acStringMode = false;
+  acStringInfo = null;
+  acWidget.style.display = 'none';
+}
+
+/* ============================================================
+   9. CONTEXT — strings / comments / templates
+   ============================================================ */
+function textContext(pos) {
+  const text = currentText().slice(0, pos);
+  let inStr = null, lineComment = false, blockComment = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i], n = text[i + 1];
+    if (lineComment)  { if (c === '\n') lineComment = false; continue; }
+    if (blockComment) { if (c === '*' && n === '/') { blockComment = false; i++; } continue; }
+    if (inStr)        { if (c === '\\') { i++; continue; } if (c === inStr) inStr = null; continue; }
+    if (c === '-' && n === '-') { lineComment = true; i++; continue; }
+    if (c === '/' && n === '*') { blockComment = true; i++; continue; }
+    if (c === '"' || c === "'" || c === '`') { inStr = c; continue; }
+  }
+  if (lineComment || blockComment) return 'comment';
+  return inStr !== null ? 'string' : null;
+}
+
+function scanTemplateEnd(s, i) {
+  for (let j = i; j < s.length; j++) {
+    const c = s[j];
+    if (c === '\\') { j++; continue; }
+    if (c === '`') return j + 1;
+  }
+  return -1;
+}
+
+function getQuoteContext(pos) {
+  const text = currentText().slice(0, pos);
+  let inStr = null, strStart = -1;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i], n = text[i + 1];
+    if (inStr) {
+      if (c === '\\') { i++; continue; }
+      if (c === inStr) { inStr = null; strStart = -1; }
+      continue;
+    }
+    if (c === '-' && n === '-') { const nl = text.indexOf('\n', i); if (nl === -1) break; i = nl; continue; }
+    if (c === '/' && n === '*') { const end = text.indexOf('*/', i + 2); if (end === -1) break; i = end + 1; continue; }
+    if (c === '`') { const e = scanTemplateEnd(text, i + 1); if (e === -1) return null; i = e - 1; continue; }
+    if (c === '"' || c === "'") { inStr = c; strStart = i; }
+  }
+  if (!inStr) return null;
+  const inner = text.slice(strStart + 1);
+  const m = inner.match(/[\p{L}_$][\p{L}\p{N}_$]*$/u);
+  const prefix = m ? m[0] : '';
+  return { quote: inStr, start: strStart, prefix, prefixStart: pos - prefix.length };
+}
+
+function refreshStringAutocomplete(qctx) {
+  const prefix = qctx.prefix;
+  const p = prefix.toLowerCase();
+  let matched = [];
+  if (p) {
+    const all = collectStringWords();
+    matched = all.filter(w => w.toLowerCase().startsWith(p) && w !== prefix).slice(0, 100);
+  }
+  acItems = matched.map(w => ({
+    label: w, kind: 'string-word', insert: w, _matchIdx: p ? 0 : -1, _isStringWord: true
+  }));
+  acStart  = qctx.prefixStart;
+  acPrefix = prefix;
+  acIndex  = 0;
+  acOpen   = true;
+  acStringMode = true;
+  const q = qctx.quote;
+  acStringInfo = {
+    label: q + '…' + q, kind: 'string-word', detail: '(string) string',
+    doc: 'A string is a sequence of characters delimited by ' + q + '. ' +
+         'Use \\n for a new line, \\t for tab and \\\\ for backslash.',
+    example: 'local msg = ' + q + 'Hello, world' + q
+  };
+  renderAutocomplete();
+  positionAutocomplete();
+}
+
+/* ============================================================
+   10. AUTOCOMPLETE REFRESH (synchronous — no worker)
+   ============================================================ */
+function refreshAutocomplete(force) {
+  const myId = ++acRequestId;
+  if (acRefreshTimer) { clearTimeout(acRefreshTimer); acRefreshTimer = null; }
+  const run = () => { acRefreshTimer = null; _doRefresh(force, myId); };
+  if (force) run();
+  else acRefreshTimer = setTimeout(run, 40);
+}
+
+function showCompletionItems(items, start, prefix) {
+  acItems  = items;
+  acStart  = start - prefix.length;
+  acPrefix = prefix;
+  acIndex  = 0;
+  acOpen   = true;
+  renderAutocomplete();
+  positionAutocomplete();
+}
+
+function _doRefresh(force, myId) {
+  if (myId !== acRequestId) return;
+
+  const sel = editor.getSelection();
+  const start = positionToOffset(sel.getStartPosition());
+  const end   = positionToOffset(sel.getEndPosition());
+  if (start !== end) { hideAutocomplete(); return; }
+
+  const qctx = getQuoteContext(start);
+  if (qctx) { refreshStringAutocomplete(qctx); return; }
+
+  acStringMode = false;
+  acStringInfo = null;
+
+  const text = currentText();
+  const before   = text.slice(0, start);
+  const m        = before.match(/[\p{L}_$][\p{L}\p{N}_$]*$/u);
+  const prefix   = m ? m[0] : '';
+  const prevChar = start > 0 ? text[start - 1] : '';
+  const beforePrefixChar = start - prefix.length > 0 ? text[start - prefix.length - 1] : '';
+  const member = beforePrefixChar === '.';
+
+  if (!force && !prefix && prevChar !== '.') { hideAutocomplete(); return; }
+
+    const ctx = textContext(start);
+  if (ctx === 'comment') { hideAutocomplete(); return; }
+
+  /* ==== Se o LSP estiver pronto, deixa ele responder ==== */
+  if (window.LuauLSP && window.LuauLSP.isReady()) {
+    window.LuauLSP.completion(start, currentText()).then((result) => {
+      if (myId !== acRequestId) return;
+      if (!result) { hideAutocomplete(); return; }
+      const list = Array.isArray(result) ? result : (result.items || []);
+      if (!list.length) { hideAutocomplete(); return; }
+
+      // Detecta o receiver (screen, gfx3d, etc.) se for uma chamada de membro
+        let receiver = '';
+        if (member) {
+          const rm = before.slice(0, start - prefix.length - 1).match(/[\p{L}\p{N}_$]+$/u);
+          receiver = rm ? rm[0] : '';
+        }
+        const items = list.map((it) => convertLspItem(it, prefix, receiver));
+      // Respeita prefixo: filtra os que não casam (o LSP às vezes devolve demais)
+      const filtered = prefix
+        ? items.filter((it) => it.label.toLowerCase().indexOf(prefix.toLowerCase()) !== -1)
+        : items;
+
+      if (!filtered.length) { hideAutocomplete(); return; }
+      showCompletionItems(filtered, start, prefix);
+    }).catch((e) => {
+      console.error('[LSP completion]', e);
+    });
+    return;
+  }
+
+  /* ==== Fallback: completions locais (como antes) ==== */
+  let items;
+  if (member) {
+    const rm = before.slice(0, start - prefix.length - 1).match(/[\p{L}\p{N}_$]+$/u);
+    const receiver = rm ? rm[0] : '';
+    items = memberCompletions(receiver, prefix);
+  } else {
+    const currentLine = monacoModel.getPositionAt(start).lineNumber;
+    items = globalCompletions(prefix, currentLine);
+  }
+
+  if (!items.length) { hideAutocomplete(); return; }
+  showCompletionItems(items, start, prefix);
+}
+
+/* ============================================================
+   11. NAVIGATION / ACCEPT
+   ============================================================ */
+function moveSelection(delta) {
+  if (!acItems.length) return;
+  acIndex = (acIndex + delta + acItems.length) % acItems.length;
+  updateSelectionUI(true);
+}
+
+function acceptCompletion() {
+  if (!acOpen) return;
+  const item = acItems[acIndex];
+  if (!item) { hideAutocomplete(); return; }
+
+  const sel = editor.getSelection();
+  const end = positionToOffset(sel.getEndPosition());
+
+  /* ==== Caminho LSP: usar textEdit ==== */
+  if (item._lspItem && item._lspItem.textEdit) {
+    const te = item._lspItem.textEdit;
+    const range = te.range || te.replace;
+    if (range) {
+      const sp = monacoModel.getPositionAt(0);
+      const startPos = { lineNumber: range.start.line + 1, column: range.start.character + 1 };
+      const endPos   = { lineNumber: range.end.line + 1,   column: range.end.character + 1 };
+      const newText  = te.newText !== undefined ? te.newText : te.replace;
+      editor.executeEdits('lsp', [{
+        range: new monaco.Range(startPos.lineNumber, startPos.column, endPos.lineNumber, endPos.column),
+        text: newText,
+        forceMoveMarkers: true
+      }]);
+      // Cursor no final do texto inserido
+      const insertedEnd = monacoModel.getOffsetAt(startPos) + newText.length;
+      editor.setPosition(monacoModel.getPositionAt(insertedEnd));
+      hideAutocomplete();
+      editor.focus();
+      return;
+    }
+  }
+
+  /* ==== Caminho local (como antes) ==== */
+  const from = acStart;
+  const to = Math.max(end, acStart + acPrefix.length);
+  let text = item.insert || item.label;
+
+  if (/^function\s+\S/.test(text)) {
+    const full = currentText();
+    const lineStart = full.lastIndexOf('\n', from - 1) + 1;
+    const lineBefore = full.slice(lineStart, from);
+    if (/\bfunction\b/.test(lineBefore)) {
+      text = text.replace(/^function\s+/, '');
+    }
+  }
+
+  let caret = from + text.length;
+  if (text.endsWith('()') || text.endsWith('<>')) caret = from + text.length - 1;
+
+  const startPos = monacoModel.getPositionAt(from);
+  const endPos   = monacoModel.getPositionAt(to);
+  editor.executeEdits('ac', [{
+    range: new monaco.Range(startPos.lineNumber, startPos.column, endPos.lineNumber, endPos.column),
+    text,
+    forceMoveMarkers: true
+  }]);
+  const newPos = monacoModel.getPositionAt(caret);
+  editor.setPosition(newPos);
+  hideAutocomplete();
+  editor.focus();
+}
+
+/* ============================================================
+   12. KEYBOARD / MOUSE IN WIDGET
+   ============================================================ */
+let resizeState = null;
+
+function startResize(e) {
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const handle = e.currentTarget;
+  resizeState = {
+    mode: handle.dataset.resize, id: e.pointerId,
+    startX: e.clientX, startY: e.clientY,
+    startListWidth: curListW, startDocsWidth: curDocsW || userDocsWidth, startMaxHeight: userMaxHeight
+  };
+  acPointerDown = true;
+  document.body.style.userSelect = 'none';
+  document.body.style.cursor = getComputedStyle(handle).cursor;
+  document.addEventListener('pointermove', onResizeMove);
+  document.addEventListener('pointerup', onResizeEnd);
+  document.addEventListener('pointercancel', onResizeEnd);
+}
+function onResizeMove(e) {
+  if (!resizeState || e.pointerId !== resizeState.id) return;
+  const dx = e.clientX - resizeState.startX;
+  const dy = e.clientY - resizeState.startY;
+  if (resizeState.mode === 'e' || resizeState.mode === 'se')
+    userListWidth = Math.max(MIN_LIST_WIDTH, resizeState.startListWidth + dx);
+  if (resizeState.mode === 'docs-e')
+    userDocsWidth = Math.max(MIN_DOCS_WIDTH, resizeState.startDocsWidth + dx);
+  if (resizeState.mode === 's' || resizeState.mode === 'se')
+    userMaxHeight = Math.max(MIN_MAX_HEIGHT, resizeState.startMaxHeight + dy);
+  updateWidgetSize();
+  positionAutocomplete();
+}
+function onResizeEnd() {
+  resizeState = null;
+  setTimeout(() => { acPointerDown = false; }, 0);
+  document.body.style.userSelect = '';
+  document.body.style.cursor = '';
+  document.removeEventListener('pointermove', onResizeMove);
+  document.removeEventListener('pointerup', onResizeEnd);
+  document.removeEventListener('pointercancel', onResizeEnd);
+}
+document.querySelectorAll('.ac-resize').forEach(h => h.addEventListener('pointerdown', startResize));
+
+acWidget.addEventListener('pointerdown', () => { acPointerDown = true; });
+document.addEventListener('pointerup',     () => { setTimeout(() => { if (!resizeState) acPointerDown = false; }, 0); });
+document.addEventListener('pointercancel', () => { setTimeout(() => { if (!resizeState) acPointerDown = false; }, 0); });
+
+acWidget.addEventListener('mousedown', (e) => {
+  if (e.target.closest('.ac-resize')) return;
+  e.preventDefault();
+});
+acWidget.addEventListener('click', (e) => {
+  const itemEl = e.target.closest('.ac-item');
+  if (!itemEl) return;
+  acIndex = parseInt(itemEl.dataset.i, 10);
+  updateSelectionUI(false);
+  acceptCompletion();
+});
+acWidget.addEventListener('mousemove', (e) => {
+  const itemEl = e.target.closest('.ac-item');
+  if (!itemEl) return;
+  const i = parseInt(itemEl.dataset.i, 10);
+  if (i !== acIndex) { acIndex = i; updateSelectionUI(false); }
+});
+
+/* ============================================================
+   13. MONACO INIT
+   ============================================================ */
+async function initMonaco() {
+  await new Promise((resolve, reject) => {
+    if (typeof window.require !== 'function') {
+      reject(new Error('Monaco loader not available'));
+      return;
+    }
+    try {
+      const workerCode =
+        "self.MonacoEnvironment = { baseUrl: '" + MONACO_BASE + "/' };\n" +
+        "importScripts('" + MONACO_BASE + "/vs/base/worker/workerMain.js');";
+      const workerUrl = URL.createObjectURL(new Blob([workerCode], { type: 'text/javascript' }));
+      window.MonacoEnvironment = { getWorkerUrl: () => workerUrl };
+    } catch (_) {}
+
+    window.require.config({ paths: { vs: MONACO_BASE + '/vs' } });
+    window.require(['vs/editor/editor.main'], resolve, reject);
+  });
+
+  defineCustomTheme();
+  registerLuauMonarch();
+
+  editor = monaco.editor.create(document.getElementById('monaco'), {
+    value: INITIAL_TEXT,
+    language: 'lua',
+    theme: 'pforge-dark',
+
+    fontFamily: "'Fira Mono', Consolas, 'Courier New', monospace",
+    fontSize: 14,
+    lineHeight: 21,
+    fontLigatures: false,
+    letterSpacing: 0,
+
+    tabSize: 2,
+    insertSpaces: true,
+    detectIndentation: false,
+    trimAutoWhitespace: true,
+
+    automaticLayout: true,
+    minimap: { enabled: false },
+    scrollBeyondLastLine: false,
+    smoothScrolling: false,
+    cursorBlinking: 'blink',
+    cursorSmoothCaretAnimation: 'off',
+    renderLineHighlight: 'all',
+    renderWhitespace: 'none',
+    renderControlCharacters: false,
+    padding: { top: 10, bottom: 10 },
+
+    lineNumbersMinChars: 3,
+    lineDecorationsWidth: 15,
+    glyphMargin: false,
+    folding: true,
+    foldingHighlight: false,
+    showFoldingControls: 'mouseover',
+
+    bracketPairColorization: { enabled: false },
+    matchBrackets: 'always',
+    guides: { indentation: true, bracketPairs: false, highlightActiveIndentation: false },
+
+    'semanticHighlighting.enabled': false,
+
+    wordWrap: 'off',
+    wrappingIndent: 'none',
+
+    /* ==== NATIVE SUGGEST DISABLED ==== */
+    quickSuggestions: false,
+    suggestOnTriggerCharacters: false,
+    wordBasedSuggestions: 'off',
+    acceptSuggestionOnEnter: 'off',
+    tabCompletion: 'off',
+    suggest: { showWords: false, preview: false },
+
+    scrollbar: {
+      verticalScrollbarSize: 14,
+      horizontalScrollbarSize: 14,
+      useShadows: false
+    },
+
+    mouseWheelZoom: true,
+    contextmenu: true,
+    fixedOverflowWidgets: true,
+    overviewRulerLanes: 0
+  });
+
+  monacoModel = editor.getModel();
+  monacoReady = true;
+
+  /* ---- Editor events ---- */
+  editor.onDidChangeCursorPosition((e) => {
+    caretOffset = monacoModel.getOffsetAt(e.position);
+    cursorPosEl.textContent = 'Ln ' + e.position.lineNumber + ', Col ' + e.position.column;
+  });
+
+  editor.onDidChangeCursorSelection(() => {
+    const sel = editor.getSelection();
+    lastSel.start = monacoModel.getOffsetAt(sel.getStartPosition());
+    lastSel.end   = monacoModel.getOffsetAt(sel.getEndPosition());
+    if (acOpen) positionAutocomplete();
+  });
+
+  editor.onDidChangeModelContent(() => { textVersion++; });
+
+  /* Ctrl + Space forces a refresh of OUR widget */
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Space, () => {
+    refreshAutocomplete(true);
+  });
+
+  /* Widget keyboard (arrows, Enter, Tab, Esc) */
+  editor.addCommand(monaco.KeyCode.DownArrow,   () => { if (acOpen) moveSelection(1);  else editor.trigger('kb','cursorDown',{}); });
+  editor.addCommand(monaco.KeyCode.UpArrow,     () => { if (acOpen) moveSelection(-1); else editor.trigger('kb','cursorUp',{});   });
+  editor.addCommand(monaco.KeyCode.PageDown,    () => { if (acOpen) moveSelection(8);  else editor.trigger('kb','cursorPageDown',{}); });
+  editor.addCommand(monaco.KeyCode.PageUp,      () => { if (acOpen) moveSelection(-8); else editor.trigger('kb','cursorPageUp',{}); });
+  editor.onKeyDown((e) => {
+    if (e.keyCode === monaco.KeyCode.Enter && acOpen && acItems.length) {  e.preventDefault();  e.stopPropagation();
+      acceptCompletion();
+    } });
+  editor.addCommand(monaco.KeyCode.Tab,         () => { if (acOpen && acItems.length) acceptCompletion(); else editor.trigger('kb','tab',{}); });
+  editor.addCommand(monaco.KeyCode.Escape,      () => { if (acOpen) hideAutocomplete(); });
+
+  /* Refresh widget as the user types */
+  monacoModel.onDidChangeContent(() => {
+    if (window.LuauLSP && window.LuauLSP.isReady()) {
+      window.LuauLSP.didChange(currentText());
+    }
+    refreshAutocomplete();
+  });
+
+  /* Hide the widget when the user clicks outside */
+  editor.onMouseDown(() => { if (acOpen) hideAutocomplete(); });
+
+  /* Reposition on scroll/resize */
+  editor.onDidScrollChange(() => { if (acOpen) positionAutocomplete(); });
+  window.addEventListener('resize', () => {
+    if (acOpen) { updateWidgetSize(); positionAutocomplete(); }
+  });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', () => {
+      if (acOpen) positionAutocomplete();
+    });
+  }
+
+  /* Remeasure fonts once Fira Mono finishes loading */
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => { try { monaco.editor.remeasureFonts(); } catch (_) {} });
+  }
+
+  setStatus('Monaco Luau: ready');
+
+    /* ==== Inicializa o Luau LSP ==== */
+  if (window.LuauLSP) {
+    setStatus('Monaco Luau: starting LSP…');
+    window.LuauLSP.initialize().then(() => {
+      window.LuauLSP.didOpen(currentText());
+      setStatus('Monaco Luau: ready (LSP)');
+    }).catch((e) => {
+      console.error('[LSP init]', e);
+      setStatus('Monaco Luau: ready (LSP failed)');
+    });
+  }
+
+  if (!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches)) {
+    editor.focus();
+  }
+}
+
+initMonaco().catch(err => {
+  console.error('[Monaco]', err);
+  setStatus('Monaco: error (' + (err && err.message ? err.message : '') + ')');
+});
+</script>
+</body>
+</html>
