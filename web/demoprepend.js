@@ -1,6 +1,6 @@
 var tempDouble, tempI64;
 const PACKAGE_NAME = '@demo';
-const deployDirectory = 'https://cdn.jsdelivr.net/gh/Zennokaidy/luau-lsp@main/web/public/';
+const deployDirectory = 'https://raw.githubusercontent.com/Zennokaidy/luau-lsp/main/web/public/';
 const docsJsonFile = 'demo.docs.json';
 const defsLuauFile = 'demo.defs.luau';
 const wasmFile = 'Luau.LanguageServer.Web.wasm';
