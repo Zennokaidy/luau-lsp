@@ -1,6 +1,6 @@
 var tempDouble, tempI64;
-
-const deployDirectory = '/';
+const PACKAGE_NAME = '@demo';
+const deployDirectory = 'https://cdn.jsdelivr.net/gh/Zennokaidy/luau-lsp@main/web/public/';
 const docsJsonFile = 'demo.docs.json';
 const defsLuauFile = 'demo.defs.luau';
 const wasmFile = 'Luau.LanguageServer.Web.wasm';
@@ -54,7 +54,7 @@ initiationPromise.then(wasmModule => {
         }
         const languageServer = wasmModule.createWasmLanguageServer(
             writeCallback,
-            '@demo',
+            PACKAGE_NAME,
             [defsLuauFile],
             [docsJsonFile]
         );
@@ -74,7 +74,8 @@ initiationPromise.then(wasmModule => {
     {
     self.postMessage({type:'error', exc:e});
     }
-});/** @nocollapse */ var LuauLanguageServerWeb = 
+});
+/** @nocollapse */ var LuauLanguageServerWeb = 
 function(moduleArg = {}) {
   var moduleRtn;
 
