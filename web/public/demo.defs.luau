@@ -1,7 +1,126 @@
 -- PixelForge Studio — Luau API definitions for luau-lsp
 
 -- ============================================================
--- TIPOS BASE
+-- STDLIB OVERRIDES
+-- Sobrescreve math/buffer/vector pra incluir funções novas
+-- que o LSP (de julho 2024) não conhece.
+-- ============================================================
+
+type Math = {
+    abs: (n: number) -> number,
+    acos: (n: number) -> number,
+    asin: (n: number) -> number,
+    atan: (n: number) -> number,
+    atan2: (y: number, x: number) -> number,
+    ceil: (n: number) -> number,
+    clamp: (n: number, min: number, max: number) -> number,
+    cos: (r: number) -> number,
+    cosh: (r: number) -> number,
+    deg: (r: number) -> number,
+    exp: (n: number) -> number,
+    floor: (n: number) -> number,
+    fmod: (a: number, b: number) -> number,
+    frexp: (n: number) -> (number, number),
+    huge: number,
+    ldexp: (m: number, e: number) -> number,
+    lerp: (a: number, b: number, t: number) -> number,
+    log: (n: number, base: number?) -> number,
+    log10: (n: number) -> number,
+    map: (x: number, inMin: number, inMax: number, outMin: number, outMax: number) -> number,
+    max: (...number) -> number,
+    min: (...number) -> number,
+    modf: (n: number) -> (number, number),
+    noise: (x: number, y: number?, z: number?) -> number,
+    pi: number,
+    pow: (a: number, b: number) -> number,
+    rad: (d: number) -> number,
+    random: (m: number?, n: number?) -> number,
+    randomseed: (seed: number) -> (),
+    round: (n: number) -> number,
+    sign: (n: number) -> number,
+    sin: (r: number) -> number,
+    sinh: (r: number) -> number,
+    sqrt: (n: number) -> number,
+    tan: (r: number) -> number,
+    tanh: (r: number) -> number,
+    isnan: (n: number) -> boolean,
+    isinf: (n: number) -> boolean,
+    isfinite: (n: number) -> boolean,
+}
+
+type Buffer = {
+    create: (size: number) -> any,
+    fromstring: (s: string) -> any,
+    tostring: (b: any) -> string,
+    len: (b: any) -> number,
+    copy: (target: any, targetOffset: number, source: any, sourceOffset: number?, count: number?) -> (),
+    fill: (b: any, offset: number, value: number, count: number?) -> (),
+    readi8: (b: any, offset: number) -> number,
+    readu8: (b: any, offset: number) -> number,
+    readi16: (b: any, offset: number) -> number,
+    readu16: (b: any, offset: number) -> number,
+    readi32: (b: any, offset: number) -> number,
+    readu32: (b: any, offset: number) -> number,
+    readf32: (b: any, offset: number) -> number,
+    readf64: (b: any, offset: number) -> number,
+    writei8: (b: any, offset: number, value: number) -> (),
+    writeu8: (b: any, offset: number, value: number) -> (),
+    writei16: (b: any, offset: number, value: number) -> (),
+    writeu16: (b: any, offset: number, value: number) -> (),
+    writei32: (b: any, offset: number, value: number) -> (),
+    writeu32: (b: any, offset: number, value: number) -> (),
+    writef32: (b: any, offset: number, value: number) -> (),
+    writef64: (b: any, offset: number, value: number) -> (),
+    readstring: (b: any, offset: number, count: number) -> string,
+    writestring: (b: any, offset: number, value: string, count: number?) -> (),
+    readbits: (b: any, bitOffset: number, bitCount: number) -> number,
+    writebits: (b: any, bitOffset: number, bitCount: number, value: number) -> (),
+}
+
+type Vector3 = {
+    x: number,
+    y: number,
+    z: number,
+    magnitude: number,
+    unit: Vector3,
+    cross: (self: Vector3, other: Vector3) -> Vector3,
+    dot: (self: Vector3, other: Vector3) -> number,
+    angle: (self: Vector3, other: Vector3, axis: Vector3?) -> number,
+    floor: (self: Vector3) -> Vector3,
+    ceil: (self: Vector3) -> Vector3,
+    abs: (self: Vector3) -> Vector3,
+    sign: (self: Vector3) -> Vector3,
+    clamp: (self: Vector3, min: Vector3, max: Vector3) -> Vector3,
+    max: (self: Vector3, ...Vector3) -> Vector3,
+    min: (self: Vector3, ...Vector3) -> Vector3,
+    lerp: (self: Vector3, goal: Vector3, alpha: number) -> Vector3,
+}
+
+type VectorLib = {
+    create: (x: number, y: number, z: number?) -> Vector3,
+    zero: Vector3,
+    one: Vector3,
+    magnitude: (v: Vector3) -> number,
+    normalize: (v: Vector3) -> Vector3,
+    cross: (a: Vector3, b: Vector3) -> Vector3,
+    dot: (a: Vector3, b: Vector3) -> number,
+    angle: (a: Vector3, b: Vector3, axis: Vector3?) -> number,
+    floor: (v: Vector3) -> Vector3,
+    ceil: (v: Vector3) -> Vector3,
+    abs: (v: Vector3) -> Vector3,
+    sign: (v: Vector3) -> Vector3,
+    clamp: (v: Vector3, min: Vector3, max: Vector3) -> Vector3,
+    max: (...Vector3) -> Vector3,
+    min: (...Vector3) -> Vector3,
+    lerp: (a: Vector3, b: Vector3, t: number) -> Vector3,
+}
+
+declare math: Math
+declare buffer: Buffer
+declare vector: VectorLib
+
+-- ============================================================
+-- TIPOS BASE (PixelForge)
 -- ============================================================
 type Screen = {
     width: number,
@@ -226,7 +345,7 @@ type PForgeSound = {
 }
 
 -- ============================================================
--- GLOBAIS
+-- GLOBAIS PixelForge
 -- ============================================================
 declare screen: Screen
 declare keyboard: Keyboard
@@ -269,7 +388,7 @@ declare do_: (action: () -> ()) -> any
 declare sleep: (seconds: number) -> ()
 
 -- ============================================================
--- MATH / TIME HELPERS
+-- MATH / TIME HELPERS (do runtime PixelForge, expostos como globais)
 -- ============================================================
 declare seconds: (n: number) -> number
 declare milliseconds: (n: number) -> number
