@@ -1,253 +1,71 @@
-cmake_minimum_required(VERSION 3.28)
-set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "")
+#include <stdio.h>
+#include <string>
+#include <memory>
+#include <algorithm>
+#include <functional>
+#include <queue>
+#include <stdexcept>
 
-option(LUAU_ENABLE_TIME_TRACE "Build with Luau TimeTrace" OFF)
-option(LSP_BUILD_ASAN "Build with ASAN" OFF)
-option(LSP_STATIC_CRT "Link with the static CRT (/MT)" OFF)
-option(LSP_BUILD_WITH_SENTRY "Build with Sentry (crash reporting)" OFF)
-option(LSP_WERROR "Warnings as errors" ON)
+#include <emscripten/emscripten.h>
+#include <emscripten/bind.h>
+#include <emscripten/val.h>
 
-set(LSP_VERSION "1.70.1")
-set(LSP_NAME "Luau")
+#include "include/LSP/ServerIOWasm.hpp"
+#include "include/LSP/LanguageServer.hpp"
+#include "include/LSP/Client.hpp"
+#include "include/Platform/LSPPlatform.hpp"
+#include "include/Platform/MonacoPlatform.hpp"
 
-if (LSP_STATIC_CRT)
-    set(LUAU_STATIC_CRT ON)
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-endif ()
+using emscripten::val;
 
-if (LUAU_ENABLE_TIME_TRACE)
-    add_compile_definitions(LUAU_ENABLE_TIME_TRACE)
-endif ()
+static std::shared_ptr<LSPClient> g_client;
+static std::shared_ptr<LanguageServer> g_server;
 
-project(Luau.LanguageServer LANGUAGES CXX)
+void pushMessage(const std::string& msg) {
+    getIncomingQueue().push(msg);
+}
 
-# Sentry setup
-if (LSP_BUILD_WITH_SENTRY)
-    include(FetchContent)
-    set(SENTRY_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-    set(SENTRY_BACKEND "crashpad" CACHE STRING "" FORCE)
-    set(SENTRY_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-    set(SENTRY_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-    set(SENTRY_BUILD_RUNTIMESTATIC ${LSP_STATIC_CRT} CACHE BOOL "" FORCE)
-    set(SENTRY_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
-    set(CRASHPAD_ENABLE_STACKTRACE ON CACHE BOOL "" FORCE)
-    FetchContent_Declare(sentry
-        URL https://github.com/getsentry/sentry-native/releases/download/0.11.0/sentry-native.zip
-        URL_HASH SHA256=2946d5d13ef2aa791fc4cee3663658da78ad8b3260f6976e1fd8f6e237c14db0
-    )
-    FetchContent_MakeAvailable(sentry)
-endif ()
+std::shared_ptr<LanguageServer> createWasmLanguageServer(
+    const val& output,
+    const std::string& packageName,
+    const val& definitionsFiles,
+    const val& documentationFiles)
+{
+    EM_ASM({ console.log('[C++] 1. inicio'); });
 
-add_subdirectory(luau)
-add_library(Luau.LanguageServer STATIC)
-add_executable(Luau.LanguageServer.CLI)
-add_executable(Luau.LanguageServer.Test)
+    auto io = std::make_unique<ServerIOWasm>(output);
+    EM_ASM({ console.log('[C++] 2. ServerIOWasm criado'); });
 
-target_sources(Luau.LanguageServer PRIVATE
-        src/LanguageServer.cpp
-        src/JsonRpc.cpp
-        src/Uri.cpp
-        src/WorkspaceFileResolver.cpp
-        src/Workspace.cpp
-        src/TextDocument.cpp
-        src/Client.cpp
-        src/DocumentationParser.cpp
-        src/LuauExt.cpp
-        src/LuauFileUtils.cpp
-        src/IostreamHelpers.cpp
-        src/Utils.cpp
-        src/Flags.cpp
-        src/Thread.cpp
-        src/JsonTomlSyntaxParser.cpp
-        src/CliConfigurationParser.cpp
-        src/platform/AutoImports.cpp
-        src/platform/LSPPlatform.cpp
-        src/platform/StringRequireAutoImporter.cpp
-        src/platform/StringRequireSuggester.cpp
-        src/platform/roblox/InstanceRequireAutoImporter.cpp
-        src/platform/roblox/RobloxCodeAction.cpp
-        src/platform/roblox/RobloxColorProvider.cpp
-        src/platform/roblox/RobloxCompletion.cpp
-        src/platform/roblox/RobloxFileResolver.cpp
-        src/platform/roblox/RobloxLanguageServer.cpp
-        src/platform/roblox/RobloxLuauExt.cpp
-        src/platform/roblox/RobloxSourcemap.cpp
-        src/platform/roblox/RobloxStringRequireSuggester.cpp
-        src/platform/roblox/RobloxSourceNode.cpp
-        src/platform/roblox/RobloxStudioPlugin.cpp
-        src/operations/Diagnostics.cpp
-        src/operations/Completion.cpp
-        src/operations/DocumentSymbol.cpp
-        src/operations/DocumentLink.cpp
-        src/operations/ColorProvider.cpp
-        src/operations/GotoDefinition.cpp
-        src/operations/Hover.cpp
-        src/operations/SignatureHelp.cpp
-        src/operations/References.cpp
-        src/operations/Rename.cpp
-        src/operations/InlayHints.cpp
-        src/operations/SemanticTokens.cpp
-        src/operations/CodeAction.cpp
-        src/operations/Refactoring.cpp
-        src/operations/WorkspaceSymbol.cpp
-        src/operations/FoldingRange.cpp
-        src/operations/CallHierarchy.cpp
-        src/operations/Bytecode.cpp
-        src/operations/RequireGraph.cpp
-        src/operations/OnTypeFormatting.cpp
-        src/transport/PipeTransport.cpp
-        src/transport/StdioTransport.cpp
-        src/Plugin/SourceMapping.cpp
-        src/Plugin/PluginTextDocument.cpp
-        src/Plugin/PluginRuntime.cpp
-        src/Plugin/PluginManager.cpp
-        src/Plugin/PluginLuaApi.cpp
-        src/Plugin/PluginDefinitions.cpp
-        extern/glob/match.cpp
-)
+    g_client = std::make_shared<LSPClient>(std::move(io));
+    EM_ASM({ console.log('[C++] 3. LSPClient criado'); });
 
-target_sources(Luau.LanguageServer.CLI PRIVATE
-        src/main.cpp
-        src/AnalyzeCli.cpp
-)
+    auto defs = emscripten::vecFromJSArray<std::string>(definitionsFiles);
+    EM_ASM({ console.log('[C++] 4. defs convertidos'); });
+    auto docs = emscripten::vecFromJSArray<std::string>(documentationFiles);
+    EM_ASM({ console.log('[C++] 5. docs convertidos'); });
 
-target_sources(Luau.LanguageServer.Test PRIVATE
-        tests/main.cpp
-        tests/Fixture.cpp
-        tests/TempDir.cpp
-        tests/TestClient.cpp
-        tests/Autocomplete.test.cpp
-        tests/AutoImports.test.cpp
-        tests/Bytecode.test.cpp
-        tests/MagicFunctions.test.cpp
-        tests/Documentation.test.cpp
-        tests/TextDocument.test.cpp
-        tests/Uri.test.cpp
-        tests/Utils.test.cpp
-        tests/WorkspaceFileResolver.test.cpp
-        tests/SemanticTokens.test.cpp
-        tests/Sourcemap.test.cpp
-        tests/References.test.cpp
-        tests/Rename.test.cpp
-        tests/ColorProvider.test.cpp
-        tests/LuauExt.test.cpp
-        tests/CliConfigurationParser.test.cpp
-        tests/Hover.test.cpp
-        tests/LanguageServer.test.cpp
-        tests/InlayHints.test.cpp
-        tests/JsonTomlSyntaxParser.test.cpp
-        tests/Definitions.test.cpp
-        tests/SignatureHelp.test.cpp
-        tests/Diagnostics.test.cpp
-        tests/GoToDefinition.test.cpp
-        tests/Glob.test.cpp
-        tests/Workspace.test.cpp
-        tests/WorkspaceSymbol.test.cpp
-        tests/RequireGraph.test.cpp
-        tests/OnTypeFormatting.test.cpp
-        tests/AnalyzeCli.test.cpp
-        tests/CodeAction.test.cpp
-        tests/Plugin.test.cpp
-        tests/Refactoring.test.cpp
-        src/AnalyzeCli.cpp # For testing
-        tests/MonacoWasm.test.cpp
-)
+    for (const auto& d : defs) g_client->definitionsFiles["globalTypes"] = d;
+    EM_ASM({ console.log('[C++] 6. defs atribuidos'); });
+    g_client->documentationFiles = docs;
+    EM_ASM({ console.log('[C++] 7. docs atribuidos'); });
 
-# TODO: Set Luau.Analysis at O2 to speed up debugging
-if (MSVC)
-    list(APPEND LUAU_LSP_OPTIONS /W3 /D_CRT_SECURE_NO_WARNINGS /bigobj)
-    if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-        list(APPEND LUAU_LSP_OPTIONS "/EHsc") # The CMake clang-cl target doesn't enable exceptions by default
-    else ()
-        list(APPEND LUAU_LSP_OPTIONS /MP) # Distribute compilation across multiple cores; doesn't work with clang-cl
-    endif ()
-else ()
-    list(APPEND LUAU_LSP_OPTIONS -Wall)
-endif ()
+    LSPPlatform::forcedPlatformFactory = [](const ClientConfiguration&, WorkspaceFileResolver* fr, WorkspaceFolder* wf) {
+        return std::make_unique<MonacoPlatform>(fr, wf);
+    };
+    EM_ASM({ console.log('[C++] 8. platform factory setada'); });
 
-if (LSP_WERROR)
-    if (MSVC)
-        list(APPEND LUAU_LSP_OPTIONS /WX) # Warnings are errors
-    else ()
-        list(APPEND LUAU_LSP_OPTIONS -Werror) # Warnings are errors
-    endif ()
-endif ()
+    g_server = std::make_shared<LanguageServer>(g_client.get(), std::nullopt);
+    EM_ASM({ console.log('[C++] 9. LanguageServer criado'); });
 
-if (LSP_BUILD_ASAN)
-    if (MSVC)
-        set(ASAN_FLAG /fsanitize=address)
-    else ()
-        set(ASAN_FLAG -fsanitize=address)
-    endif ()
+    return g_server;
+}
 
-    list(APPEND LUAU_LSP_OPTIONS ${ASAN_FLAG})
+EMSCRIPTEN_BINDINGS(languageServerBindings) {
+    emscripten::function("pushMessage", &pushMessage);
+    emscripten::function("createWasmLanguageServer", &createWasmLanguageServer,
+        emscripten::return_value_policy::take_ownership());
 
-    set(LUAU_ASAN_TARGETS Luau.Ast Luau.Analysis Luau.Compiler Luau.Config Luau.VM Luau.CodeGen Luau.Common)
-    foreach (TARGET_NAME IN LISTS LUAU_ASAN_TARGETS)
-        target_compile_options(${TARGET_NAME} PRIVATE ${ASAN_FLAG})
-    endforeach ()
-
-    if (NOT MSVC)
-        foreach (TARGET_NAME IN LISTS LUAU_ASAN_TARGETS ITEMS Luau.LanguageServer Luau.LanguageServer.CLI Luau.LanguageServer.Test)
-            target_link_options(${TARGET_NAME} PRIVATE ${ASAN_FLAG})
-        endforeach ()
-    endif ()
-endif ()
-
-set(EXTERN_INCLUDES extern/json/include extern/glob/include extern/argparse/include extern/toml/include extern/ryml/include)
-
-target_compile_features(Luau.LanguageServer PUBLIC cxx_std_17)
-target_compile_options(Luau.LanguageServer PRIVATE ${LUAU_LSP_OPTIONS})
-target_compile_definitions(Luau.LanguageServer PUBLIC
-    LSP_VERSION="${LSP_VERSION}"
-    LSP_NAME="${LSP_NAME}"
-    $<$<BOOL:${LSP_BUILD_WITH_SENTRY}>:LSP_BUILD_WITH_SENTRY>
-)
-target_include_directories(Luau.LanguageServer PUBLIC src/include)
-target_include_directories(Luau.LanguageServer SYSTEM PUBLIC ${EXTERN_INCLUDES})
-target_link_libraries(Luau.LanguageServer PRIVATE Luau.Ast Luau.Analysis Luau.Compiler Luau.VM Luau.CodeGen)
-
-set_target_properties(Luau.LanguageServer.CLI PROPERTIES OUTPUT_NAME luau-lsp)
-target_compile_options(Luau.LanguageServer.CLI PRIVATE ${LUAU_LSP_OPTIONS})
-target_include_directories(Luau.LanguageServer.CLI PRIVATE src/include)
-target_include_directories(Luau.LanguageServer.CLI SYSTEM PRIVATE ${EXTERN_INCLUDES})
-target_link_libraries(Luau.LanguageServer.CLI PRIVATE Luau.LanguageServer Luau.Analysis)
-
-target_compile_options(Luau.LanguageServer.Test PRIVATE ${LUAU_LSP_OPTIONS})
-target_include_directories(Luau.LanguageServer.Test PRIVATE tests)
-target_include_directories(Luau.LanguageServer.Test SYSTEM PRIVATE ${EXTERN_INCLUDES} extern/doctest)
-target_link_libraries(Luau.LanguageServer.Test PRIVATE Luau.Ast Luau.Analysis Luau.LanguageServer)
-
-add_executable(Luau.LanguageServer.Web)
-target_sources(Luau.LanguageServer.Web PRIVATE
-        src/wasm.cpp
-)
-set_target_properties(
-    Luau.LanguageServer.Web
-    PROPERTIES
-        SUFFIX ".js"
-)
-target_include_directories(Luau.LanguageServer.Web PRIVATE src/include emsdk/upstream/emscripten/cache/sysroot/include)
-target_compile_options(Luau.LanguageServer.Web PRIVATE ${LUAU_LSP_OPTIONS})
-target_link_libraries(Luau.LanguageServer.Web PRIVATE Luau.Ast Luau.Analysis Luau.Compiler Luau.LanguageServer)
-target_link_options(Luau.LanguageServer.Web PRIVATE -sDEFAULT_LIBRARY_FUNCS_TO_INCLUDE=$dynCall)
-target_link_options(Luau.LanguageServer.Web PRIVATE -sENVIRONMENT=web)
-target_link_options(Luau.LanguageServer.Web PRIVATE -sMODULARIZE=1 -sEXPORT_NAME=LuauLanguageServerWeb -sEXPORT_ES6=1)
-target_link_options(Luau.LanguageServer.Web PRIVATE --bind --no-entry -sIGNORE_MISSING_MAIN=1 -sALLOW_MEMORY_GROWTH=1)
-target_link_options(Luau.LanguageServer.Web PRIVATE -sEXPORTED_RUNTIME_METHODS=FS)
-# if necessary, we can enable these flags to get separate dwarf debugging files for stack traces in browser tools. it's expensive and unweildy.
-# target_link_options(Luau.LanguageServer.Web PRIVATE "$<$<CONFIG:Debug>:-gseparate_dwarf -v -sEXCEPTION_STACK_TRACES -sEMULATE_FUNCTION_POINTER_CASTS -sASSERTIONS=2>")
-# we need exception support because we use JsonRpcException for control flow in normal operation
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fexceptions")
-if (LSP_BUILD_WITH_SENTRY)
-    target_link_libraries(Luau.LanguageServer PRIVATE sentry)
-    target_link_libraries(Luau.LanguageServer.CLI PRIVATE sentry)
-
-    add_custom_command(
-            TARGET Luau.LanguageServer.CLI POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "$<TARGET_FILE:crashpad_handler>"
-            "$<TARGET_FILE_DIR:Luau.LanguageServer.CLI>"
-            COMMENT "Copying crashpad_handler to output directory"
-    )
-endif ()
+    emscripten::class_<LanguageServer>("LanguageServer")
+        .smart_ptr<std::shared_ptr<LanguageServer>>("LanguageServer")
+        .function("processInput", &LanguageServer::processInputLoop);
+}
