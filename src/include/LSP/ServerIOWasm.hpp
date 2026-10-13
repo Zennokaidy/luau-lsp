@@ -15,12 +15,19 @@ protected:
 public:
     ServerIOWasm(const val& output_) : output(output_) {}
 
-    void sendRawMessage(const json& message) override {
-        output(message.dump());
+    // Envia dados pro JavaScript via callback
+    void send(const std::string& data) override {
+        output(data);
     }
 
-    bool readRawMessage(std::string& output) const override {
-        emscripten_console_error("ServerIOWeb::readRawMessage should never be called");
+    // No WASM, o JS empurra mensagens via outra função. read() não é usado.
+    void read(char* buffer, unsigned int length) override {
+        emscripten_console_error("ServerIOWasm::read should never be called");
+    }
+
+    // Mesma coisa: quem empurra é o JS.
+    bool readLine(std::string& out) override {
+        emscripten_console_error("ServerIOWasm::readLine should never be called");
         return false;
     }
 };
