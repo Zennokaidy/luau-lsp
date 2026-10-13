@@ -12,6 +12,9 @@
 #include <memory>
 #include <unordered_set>
 
+std::function<std::unique_ptr<LSPPlatform>(
+    const ClientConfiguration&, WorkspaceFileResolver*, WorkspaceFolder*)> LSPPlatform::forcedPlatformFactory = nullptr;
+
 LSPPlatform::LSPPlatform(WorkspaceFileResolver* fileResolver, WorkspaceFolder* workspaceFolder)
     : fileResolver(fileResolver)
     , workspaceFolder(workspaceFolder)
@@ -19,6 +22,16 @@ LSPPlatform::LSPPlatform(WorkspaceFileResolver* fileResolver, WorkspaceFolder* w
 }
 
 std::unique_ptr<LSPPlatform> LSPPlatform::getPlatform(
+    const ClientConfiguration& config, WorkspaceFileResolver* fileResolver, WorkspaceFolder* workspaceFolder)
+{
+    if (forcedPlatformFactory)
+        return forcedPlatformFactory(config, fileResolver, workspaceFolder);
+
+    if (config.types.roblox && config.platform.type == LSPPlatformConfig::Roblox)
+        return std::make_unique<RobloxPlatform>(fileResolver, workspaceFolder);
+
+    return std::make_unique<LSPPlatform>(fileResolver, workspaceFolder);
+}
     const ClientConfiguration& config, WorkspaceFileResolver* fileResolver, WorkspaceFolder* workspaceFolder)
 {
     if (config.types.roblox && config.platform.type == LSPPlatformConfig::Roblox)

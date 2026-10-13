@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include "LSP/ClientConfiguration.hpp"
 #include "LSP/TextDocument.hpp"
 #include "Platform/StringRequireTypes.hpp"
@@ -138,6 +139,9 @@ public:
     {
         return false;
     }
+
+    static std::function<std::unique_ptr<LSPPlatform>(
+        const ClientConfiguration&, WorkspaceFileResolver*, WorkspaceFolder*)> forcedPlatformFactory;
 
     static std::unique_ptr<LSPPlatform> getPlatform(
         const ClientConfiguration& config, WorkspaceFileResolver* fileResolver, WorkspaceFolder* workspaceFolder = nullptr);

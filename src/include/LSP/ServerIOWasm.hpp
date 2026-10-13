@@ -1,27 +1,25 @@
-#include "LSP/ServerIO.hpp"
+#pragma once
+#include "LSP/Transport/Transport.hpp"
 #include <stdexcept>
 #include <string>
-#include <exception>
 #include <emscripten/bind.h>
 #include <emscripten/console.h>
 #include <emscripten/val.h>
 
-using std::runtime_error;
 using emscripten::val;
 
-class ServerIOWasm : public ServerIO {
-    protected:
+class ServerIOWasm : public Transport {
+protected:
     const val output;
 
-    public:
-    ServerIOWasm(const val & output_) : output(output_) {}
+public:
+    ServerIOWasm(const val& output_) : output(output_) {}
 
-    const void sendRawMessage(const json& message) const override
-    {
+    void sendRawMessage(const json& message) override {
         output(message.dump());
     }
-    const bool readRawMessage(std::string& output) const override
-    {
+
+    bool readRawMessage(std::string& output) const override {
         emscripten_console_error("ServerIOWeb::readRawMessage should never be called");
         return false;
     }
