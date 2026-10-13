@@ -234,7 +234,7 @@ target_link_options(Luau.LanguageServer.Web PRIVATE -sDEFAULT_LIBRARY_FUNCS_TO_I
 target_link_options(Luau.LanguageServer.Web PRIVATE -sENVIRONMENT=web)
 target_link_options(Luau.LanguageServer.Web PRIVATE -sMODULARIZE=1 -sEXPORT_NAME=LuauLanguageServerWeb -sEXPORT_ES6=1)
 target_link_options(Luau.LanguageServer.Web PRIVATE --bind --no-entry -sIGNORE_MISSING_MAIN=1 -sALLOW_MEMORY_GROWTH=1)
-target_link_options(Luau.LanguageServer.Web PRIVATE -sMINIMAL_RUNTIME=2 -sEXPORTED_RUNTIME_METHODS=FS)
+target_link_options(Luau.LanguageServer.Web PRIVATE -sEXPORTED_RUNTIME_METHODS=FS)
 # if necessary, we can enable these flags to get separate dwarf debugging files for stack traces in browser tools. it's expensive and unweildy.
 # target_link_options(Luau.LanguageServer.Web PRIVATE "$<$<CONFIG:Debug>:-gseparate_dwarf -v -sEXCEPTION_STACK_TRACES -sEMULATE_FUNCTION_POINTER_CASTS -sASSERTIONS=2>")
 # we need exception support because we use JsonRpcException for control flow in normal operation
