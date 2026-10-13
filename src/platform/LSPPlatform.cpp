@@ -32,13 +32,6 @@ std::unique_ptr<LSPPlatform> LSPPlatform::getPlatform(
 
     return std::make_unique<LSPPlatform>(fileResolver, workspaceFolder);
 }
-    const ClientConfiguration& config, WorkspaceFileResolver* fileResolver, WorkspaceFolder* workspaceFolder)
-{
-    if (config.types.roblox && config.platform.type == LSPPlatformConfig::Roblox)
-        return std::make_unique<RobloxPlatform>(fileResolver, workspaceFolder);
-
-    return std::make_unique<LSPPlatform>(fileResolver, workspaceFolder);
-}
 
 std::unique_ptr<Luau::RequireSuggester> LSPPlatform::getRequireSuggester()
 {
