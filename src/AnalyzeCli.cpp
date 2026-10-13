@@ -336,7 +336,51 @@ int startAnalyze(const argparse::ArgumentParser& program)
 
     auto files = getFilesToAnalyze(*filesArg, &workspace);
 
+<<<<<<< ours
     if (files.empty())
+=======
+    for (auto& definitionsPath : definitionsPaths)
+    {
+        if (!std::filesystem::exists(definitionsPath))
+        {
+            fprintf(stderr, "Cannot load definitions file %s: path does not exist\n", definitionsPath.generic_string().c_str());
+            return 1;
+        }
+
+        auto definitionsContents = readFile(definitionsPath);
+        if (!definitionsContents)
+        {
+            fprintf(stderr, "Cannot load definitions file %s: failed to read\n", definitionsPath.generic_string().c_str());
+            return 1;
+        }
+
+        // TODO - parameterize package name for additional definitions.
+        auto loadResult = types::registerDefinitions(frontend, frontend.globals, *definitionsContents, "@roblox", /* typeCheckForAutocomplete = */ false);
+        if (!loadResult.success)
+        {
+            fprintf(stderr, "Failed to load definitions\n");
+            for (const auto& error : loadResult.parseResult.errors)
+                report(
+                    format, definitionsPath.relative_path().generic_string().c_str(), error.getLocation(), "SyntaxError", error.getMessage().c_str());
+
+            if (loadResult.module)
+            {
+                for (const auto& error : loadResult.module->errors)
+                    if (const auto* syntaxError = Luau::get_if<Luau::SyntaxError>(&error.data))
+                        report(format, definitionsPath.relative_path().generic_string().c_str(), error.location, "SyntaxError",
+                            syntaxError->message.c_str());
+                    else
+                        report(format, definitionsPath.relative_path().generic_string().c_str(), error.location, "TypeError",
+                            Luau::toString(error).c_str());
+            }
+            return 1;
+        }
+
+        platform->mutateRegisteredDefinitions(frontend.globals, types::parseDefinitionsFileMetadata(*definitionsContents));
+    }
+
+    if (sourcemapPath)
+>>>>>>> theirs
     {
         fprintf(stderr, "error: no files provided\n");
         return 1;
