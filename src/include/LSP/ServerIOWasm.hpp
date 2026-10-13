@@ -2,11 +2,18 @@
 #include "LSP/Transport/Transport.hpp"
 #include <stdexcept>
 #include <string>
+#include <queue>
 #include <emscripten/bind.h>
 #include <emscripten/console.h>
 #include <emscripten/val.h>
 
 using emscripten::val;
+
+// Fila global — o JS empurra, o C++ lê no loop
+inline std::queue<std::string>& getIncomingQueue() {
+    static std::queue<std::string> q;
+    return q;
+}
 
 class ServerIOWasm : public Transport {
 protected:
@@ -15,19 +22,19 @@ protected:
 public:
     ServerIOWasm(const val& output_) : output(output_) {}
 
-    // Envia dados pro JavaScript via callback
     void send(const std::string& data) override {
         output(data);
     }
 
-    // No WASM, o JS empurra mensagens via outra função. read() não é usado.
     void read(char* buffer, unsigned int length) override {
-        emscripten_console_error("ServerIOWasm::read should never be called");
+        // não usado
     }
 
-    // Mesma coisa: quem empurra é o JS.
     bool readLine(std::string& out) override {
-        emscripten_console_error("ServerIOWasm::readLine should never be called");
-        return false;
+        auto& q = getIncomingQueue();
+        if (q.empty()) return false;
+        out = q.front();
+        q.pop();
+        return true;
     }
 };
