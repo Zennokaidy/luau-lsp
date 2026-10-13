@@ -41,6 +41,8 @@ protected:
     WorkspaceFolder* workspaceFolder;
 
 public:
+    virtual std::string getName() { return "LSPPlatform"; }
+    
     virtual void mutateRegisteredDefinitions(Luau::GlobalTypes& globals, std::optional<nlohmann::json> metadata) {}
 
     virtual void onDidChangeWatchedFiles(const lsp::FileEvent& change) {}
