@@ -1,0 +1,34 @@
+name: Build WASM
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.64
+
+      - name: Configure CMake
+        run: emcmake cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build Luau.LanguageServer.Web
+        run: cmake --build build --target Luau.LanguageServer.Web --config Release
+
+      - name: Upload WASM Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: luau-lsp-wasm
+          path: |
+            build/Luau.LanguageServer.Web.js
+            build/Luau.LanguageServer.Web.wasm
