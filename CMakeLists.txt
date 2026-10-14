@@ -21,7 +21,6 @@ endif ()
 
 project(Luau.LanguageServer LANGUAGES CXX)
 
-# Sentry setup
 if (LSP_BUILD_WITH_SENTRY)
     include(FetchContent)
     set(SENTRY_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
@@ -149,17 +148,16 @@ target_sources(Luau.LanguageServer.Test PRIVATE
         tests/CodeAction.test.cpp
         tests/Plugin.test.cpp
         tests/Refactoring.test.cpp
-        src/AnalyzeCli.cpp # For testing
+        src/AnalyzeCli.cpp
         tests/MonacoWasm.test.cpp
 )
 
-# TODO: Set Luau.Analysis at O2 to speed up debugging
 if (MSVC)
     list(APPEND LUAU_LSP_OPTIONS /W3 /D_CRT_SECURE_NO_WARNINGS /bigobj)
     if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-        list(APPEND LUAU_LSP_OPTIONS "/EHsc") # The CMake clang-cl target doesn't enable exceptions by default
+        list(APPEND LUAU_LSP_OPTIONS "/EHsc")
     else ()
-        list(APPEND LUAU_LSP_OPTIONS /MP) # Distribute compilation across multiple cores; doesn't work with clang-cl
+        list(APPEND LUAU_LSP_OPTIONS /MP)
     endif ()
 else ()
     list(APPEND LUAU_LSP_OPTIONS -Wall)
@@ -167,9 +165,9 @@ endif ()
 
 if (LSP_WERROR)
     if (MSVC)
-        list(APPEND LUAU_LSP_OPTIONS /WX) # Warnings are errors
+        list(APPEND LUAU_LSP_OPTIONS /WX)
     else ()
-        list(APPEND LUAU_LSP_OPTIONS -Werror) # Warnings are errors
+        list(APPEND LUAU_LSP_OPTIONS -Werror)
     endif ()
 endif ()
 
@@ -234,11 +232,11 @@ target_link_options(Luau.LanguageServer.Web PRIVATE -sDEFAULT_LIBRARY_FUNCS_TO_I
 target_link_options(Luau.LanguageServer.Web PRIVATE -sENVIRONMENT=web)
 target_link_options(Luau.LanguageServer.Web PRIVATE -sMODULARIZE=1 -sEXPORT_NAME=LuauLanguageServerWeb -sEXPORT_ES6=1)
 target_link_options(Luau.LanguageServer.Web PRIVATE --bind --no-entry -sIGNORE_MISSING_MAIN=1 -sALLOW_MEMORY_GROWTH=1)
-target_link_options(Luau.LanguageServer.Web PRIVATE -sEXPORTED_RUNTIME_METHODS=FS -sDISABLE_EXCEPTION_CATCHING=0)
-# if necessary, we can enable these flags to get separate dwarf debugging files for stack traces in browser tools. it's expensive and unweildy.
-# target_link_options(Luau.LanguageServer.Web PRIVATE "$<$<CONFIG:Debug>:-gseparate_dwarf -v -sEXCEPTION_STACK_TRACES -sEMULATE_FUNCTION_POINTER_CASTS -sASSERTIONS=2>")
-# we need exception support because we use JsonRpcException for control flow in normal operation
+target_link_options(Luau.LanguageServer.Web PRIVATE -sEXPORTED_RUNTIME_METHODS=FS -sDISABLE_EXCEPTION_CATCHING=0 -sSUPPORT_LONGJMP=emscripten -sSTACK_SIZE=5MB)
+
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fexceptions")
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fexceptions")
+
 if (LSP_BUILD_WITH_SENTRY)
     target_link_libraries(Luau.LanguageServer PRIVATE sentry)
     target_link_libraries(Luau.LanguageServer.CLI PRIVATE sentry)
