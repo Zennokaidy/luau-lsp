@@ -11,7 +11,9 @@
 #include "LSP/Client.hpp"
 #include "LSP/Workspace.hpp"
 
+#ifndef __EMSCRIPTEN__
 #include "Thread.hpp"
+#endif
 
 using json = nlohmann::json;
 using namespace json_rpc;
@@ -35,12 +37,8 @@ NLOHMANN_DEFINE_OPTIONAL(InitializationOptions, fflags)
 class LanguageServer
 {
 private:
-    // Client is guaranteed to live for the duration of the whole program
     LSPClient* client;
     std::optional<Luau::Config> defaultConfig;
-    // A "in memory" workspace folder which doesn't actually have a root.
-    // Any files which aren't part of a workspace but are opened will be handled here.
-    // This is common if the client has not yet opened a folder
     WorkspaceFolderPtr nullWorkspace;
     std::vector<WorkspaceFolderPtr> workspaceFolders;
 
@@ -51,8 +49,6 @@ public:
 
     static lsp::ServerCapabilities getServerCapabilities();
 
-    /// Finds the workspace which the file belongs to.
-    /// If no workspace is found, the file is attached to the null workspace
     WorkspaceFolderPtr findWorkspace(const lsp::DocumentUri& file, bool shouldInitialize = true);
 
     void onRequest(const id_type& id, const std::string& method, std::optional<json> params);
@@ -60,13 +56,14 @@ public:
     void processInputLoop();
     bool requestedShutdown();
 
-    // Visible for testing only
     void handleMessage(const json_rpc::JsonRpcMessage& msg);
 
-    // Visible for testing only
     void shutdown();
 
-    // Dispatch handlers
+#ifdef __EMSCRIPTEN__
+    void processMessage(const std::string& jsonString);
+#endif
+
 private:
     bool allWorkspacesReceivedConfiguration() const;
     void clearCancellationToken(const json_rpc::JsonRpcMessage& msg);
@@ -97,6 +94,8 @@ private:
     std::mutex messagesMutex;
     std::condition_variable messagesCv;
     std::queue<json_rpc::JsonRpcMessage> messages;
+#ifndef __EMSCRIPTEN__
     Thread messageProcessorThread;
+#endif
     std::unordered_map<id_type, LSPCancellationToken> cancellationTokens;
 };
