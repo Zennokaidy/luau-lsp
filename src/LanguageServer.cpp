@@ -963,5 +963,7 @@ void LanguageServer::shutdown()
     }
 
     messagesCv.notify_all();
+#ifndef __EMSCRIPTEN__
     messageProcessorThread.join();
+#endif
 }
