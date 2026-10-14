@@ -32,13 +32,27 @@ LanguageServer::LanguageServer(LSPClient* aClient, std::optional<Luau::Config> a
     , defaultConfig(std::move(aDefaultConfig))
     , nullWorkspace(std::make_shared<WorkspaceFolder>(client, "$NULL_WORKSPACE", Uri(), defaultConfig))
 {
+#ifndef __EMSCRIPTEN__
     messageProcessorThread = Thread(
         [this]
         {
             while (auto message = popMessage())
                 handleMessage(*message);
         });
+#endif
 }
+
+#ifdef __EMSCRIPTEN__
+void LanguageServer::processMessage(const std::string& jsonString)
+{
+    try {
+        auto msg = json_rpc::parse(jsonString);
+        handleMessage(msg);
+    } catch (const json::exception& e) {
+        client->sendError(std::nullopt, JsonRpcException(lsp::ErrorCode::ParseError, e.what()));
+    }
+}
+#endif
 
 /// Finds the workspace which the file belongs to.
 /// If no workspace is found, the file is attached to the null workspace
