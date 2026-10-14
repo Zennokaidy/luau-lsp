@@ -22,7 +22,7 @@ public:
 
     [[nodiscard]] std::optional<Luau::ModuleName> resolveToVirtualPath(const Uri& name) const override
     {
-        return name.toString();
+        return name.fsPath();
     }
 
     [[nodiscard]] std::optional<Uri> resolveToRealPath(const Luau::ModuleName& name) const override
