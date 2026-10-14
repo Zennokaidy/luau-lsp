@@ -15,6 +15,7 @@
 #include "include/LSP/Client.hpp"
 #include "include/Platform/LSPPlatform.hpp"
 #include "include/Platform/MonacoPlatform.hpp"
+#include "include/Platform/RobloxPlatform.hpp"
 
 using emscripten::val;
 
@@ -47,7 +48,9 @@ std::shared_ptr<LanguageServer> createWasmLanguageServer(
         g_client->documentationFiles = docs;
 
         EM_ASM({ self.postMessage({ type: "info", msg: "[C++] defs/docs atribuidos" }); });
-        LSPPlatform::forcedPlatformFactory = [](const ClientConfiguration&, WorkspaceFileResolver* fr, WorkspaceFolder* wf) {
+        LSPPlatform::forcedPlatformFactory = [](const ClientConfiguration& config, WorkspaceFileResolver* fr, WorkspaceFolder* wf) -> std::unique_ptr<LSPPlatform> {
+            if (config.types.roblox)
+                return std::make_unique<RobloxPlatform>(fr, wf);
             return std::make_unique<MonacoPlatform>(fr, wf);
         };
 
