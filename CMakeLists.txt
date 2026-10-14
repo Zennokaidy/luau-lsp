@@ -21,6 +21,11 @@ endif ()
 
 project(Luau.LanguageServer LANGUAGES CXX)
 
+if (EMSCRIPTEN)
+    add_compile_options(-fexceptions)
+    add_link_options(-fexceptions)
+endif ()
+
 if (LSP_BUILD_WITH_SENTRY)
     include(FetchContent)
     set(SENTRY_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
@@ -233,9 +238,6 @@ target_link_options(Luau.LanguageServer.Web PRIVATE -sENVIRONMENT=web)
 target_link_options(Luau.LanguageServer.Web PRIVATE -sMODULARIZE=1 -sEXPORT_NAME=LuauLanguageServerWeb -sEXPORT_ES6=1)
 target_link_options(Luau.LanguageServer.Web PRIVATE --bind --no-entry -sIGNORE_MISSING_MAIN=1 -sALLOW_MEMORY_GROWTH=1)
 target_link_options(Luau.LanguageServer.Web PRIVATE -sEXPORTED_RUNTIME_METHODS=FS -sDISABLE_EXCEPTION_CATCHING=0 -sSUPPORT_LONGJMP=emscripten -sSTACK_SIZE=5MB)
-
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fexceptions")
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fexceptions")
 
 if (LSP_BUILD_WITH_SENTRY)
     target_link_libraries(Luau.LanguageServer PRIVATE sentry)
