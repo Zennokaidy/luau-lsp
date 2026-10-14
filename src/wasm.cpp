@@ -32,36 +32,36 @@ std::shared_ptr<LanguageServer> createWasmLanguageServer(
     const val& documentationFiles)
 {
     try {
-        EM_ASM({ console.log('[C++] inicio'); });
+        EM_ASM({ self.postMessage({ type: "info", msg: "[C++] inicio" }); });
         auto io = std::make_unique<ServerIOWasm>(output);
 
-        EM_ASM({ console.log('[C++] ServerIOWasm criado'); });
+        EM_ASM({ self.postMessage({ type: "info", msg: "[C++] ServerIOWasm criado" }); });
         g_client = std::make_shared<LSPClient>(std::move(io));
 
-        EM_ASM({ console.log('[C++] LSPClient criado'); });
+        EM_ASM({ self.postMessage({ type: "info", msg: "[C++] LSPClient criado" }); });
         auto defs = emscripten::vecFromJSArray<std::string>(definitionsFiles);
         auto docs = emscripten::vecFromJSArray<std::string>(documentationFiles);
 
-        EM_ASM({ console.log('[C++] defs/docs convertidos'); });
+        EM_ASM({ self.postMessage({ type: "info", msg: "[C++] defs/docs convertidos" }); });
         for (const auto& d : defs) g_client->definitionsFiles["globalTypes"] = d;
         g_client->documentationFiles = docs;
 
-        EM_ASM({ console.log('[C++] defs/docs atribuidos'); });
+        EM_ASM({ self.postMessage({ type: "info", msg: "[C++] defs/docs atribuidos" }); });
         LSPPlatform::forcedPlatformFactory = [](const ClientConfiguration&, WorkspaceFileResolver* fr, WorkspaceFolder* wf) {
             return std::make_unique<MonacoPlatform>(fr, wf);
         };
 
-        EM_ASM({ console.log('[C++] platform factory setada'); });
+        EM_ASM({ self.postMessage({ type: "info", msg: "[C++] platform factory setada" }); });
         g_server = std::make_shared<LanguageServer>(g_client.get(), std::nullopt);
 
-        EM_ASM({ console.log('[C++] LanguageServer criado'); });
+        EM_ASM({ self.postMessage({ type: "info", msg: "[C++] LanguageServer criado" }); });
         return g_server;
     } catch (const std::exception& e) {
         std::string msg = std::string("exception: ") + e.what();
-        EM_ASM({ console.log('[C++] CAUGHT:', UTF8ToString($0)); }, msg.c_str());
+        EM_ASM({ self.postMessage({ type: "error", msg: "[C++] CAUGHT: " + UTF8ToString($0) }); }, msg.c_str());
         throw std::runtime_error(msg);
     } catch (...) {
-        EM_ASM({ console.log('[C++] CAUGHT: exception desconhecida'); });
+        EM_ASM({ self.postMessage({ type: "error", msg: "[C++] CAUGHT: exception desconhecida" }); });
         throw std::runtime_error("exception desconhecida");
     }
 }
