@@ -22,9 +22,9 @@ endif ()
 project(Luau.LanguageServer LANGUAGES CXX)
 
 if (EMSCRIPTEN)
-    add_compile_options(-fexceptions)
-    add_link_options(-fexceptions)
-endif ()
+    add_compile_options(-fexceptions -sDISABLE_EXCEPTION_CATCHING=0)
+    add_link_options(-fexceptions -sDISABLE_EXCEPTION_CATCHING=0 -sSUPPORT_LONGJMP=emscripten)
+endif()
 
 if (LSP_BUILD_WITH_SENTRY)
     include(FetchContent)
