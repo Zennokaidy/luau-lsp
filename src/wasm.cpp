@@ -73,14 +73,5 @@ EMSCRIPTEN_BINDINGS(languageServerBindings) {
 
     emscripten::class_<LanguageServer>("LanguageServer")
         .smart_ptr<std::shared_ptr<LanguageServer>>("LanguageServer")
-#ifdef __EMSCRIPTEN__
-        .function("processInput", &LanguageServer::processMessage)
-#else
-        .function("processInput", &LanguageServer::processInputLoop)
-#endif
-        ;
-}
-    emscripten::class_<LanguageServer>("LanguageServer")
-        .smart_ptr<std::shared_ptr<LanguageServer>>("LanguageServer")
-        .function("processInput", &LanguageServer::processInputLoop);
+        .function("processInput", &LanguageServer::processMessage);
 }
