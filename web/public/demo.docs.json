@@ -93,7 +93,7 @@
     "returns": [
       "@luau/global/math.abs/return/0"
     ],
-    "code_sample": ""
+    "code_sample": "local val = math.abs(-15.5)\nprint(val) -- 15.5"
   },
   "@luau/global/math.acos/param/0": {
     "documentation": ""
@@ -195,7 +195,7 @@
     "returns": [
       "@luau/global/math.ceil/return/0"
     ],
-    "code_sample": ""
+    "code_sample": "local rounded = math.ceil(4.1)\nprint(rounded) -- 5"
   },
   "@luau/global/math.clamp/param/0": {
     "documentation": ""
@@ -323,7 +323,7 @@
     "returns": [
       "@luau/global/math.floor/return/0"
     ],
-    "code_sample": ""
+    "code_sample": "local rounded = math.floor(4.9)\nprint(rounded) -- 4"
   },
   "@luau/global/math.fmod/param/0": {
     "documentation": ""
@@ -622,7 +622,7 @@
     "returns": [
       "@luau/global/math.random/return/0"
     ],
-    "code_sample": ""
+    "code_sample": "local rand = math.random(1, 10)\nprint(rand)"
   },
   "@luau/global/math.randomseed/param/0": {
     "documentation": ""
@@ -1719,7 +1719,7 @@
       }
     ],
     "returns": [],
-    "code_sample": ""
+    "code_sample": "local t = {1, 2}\ntable.insert(t, 3)\nprint(#t) -- 3"
   },
   "@luau/global/table.insert/overload/(table, Variant) -> ()/param/0": {
     "documentation": "The table that is being appended to."
@@ -1740,7 +1740,7 @@
       }
     ],
     "returns": [],
-    "code_sample": ""
+    "code_sample": "local t = {1, 2}\ntable.insert(t, 3)\nprint(#t) -- 3"
   },
   "@luau/global/table.isfrozen/param/0": {
     "documentation": "The table to check."
@@ -1870,7 +1870,7 @@
     "returns": [
       "@luau/global/table.remove/return/0"
     ],
-    "code_sample": ""
+    "code_sample": "local t = {10, 20, 30}\ntable.remove(t, 1)\nprint(t[1]) -- 20"
   },
   "@luau/global/table.sort/param/0": {
     "documentation": ""
@@ -2069,7 +2069,7 @@
     "returns": [
       "@luau/global/string.format/return/0"
     ],
-    "code_sample": ""
+    "code_sample": "local result = string.format(\"Hello, %s!\", \"World\")\nprint(result)"
   },
   "@luau/global/string.gmatch/param/0": {
     "documentation": ""
@@ -2139,7 +2139,7 @@
       "@luau/global/string.gsub/return/0",
       "@luau/global/string.gsub/return/1"
     ],
-    "code_sample": ""
+    "code_sample": "local text = \"banana\"\nlocal newText = string.gsub(text, \"a\", \"o\")\nprint(newText)"
   },
   "@luau/global/string.len/param/0": {
     "documentation": ""
@@ -2832,7 +2832,7 @@
     "returns": [
       "@luau/global/assert/return/0"
     ],
-    "code_sample": ""
+    "code_sample": "local value = 10\nassert(value > 5, \"Value must be greater than 5\")"
   },
   "@luau/global/collectgarbage/param/0": {
     "documentation": "The name of the operation that should be performed by the garbage collector."
@@ -2872,7 +2872,7 @@
       }
     ],
     "returns": [],
-    "code_sample": ""
+    "code_sample": "error(\"Critical error triggered in system\")"
   },
   "@luau/global/getfenv/param/0": {
     "documentation": "The stack level (int) of the environment to be returned; or the function whose environment will be returned."
@@ -2910,7 +2910,7 @@
     "returns": [
       "@luau/global/getmetatable/return/0"
     ],
-    "code_sample": ""
+    "code_sample": "local t = setmetatable({}, {__mode = \"k\"})\nprint(getmetatable(t).__mode)"
   },
   "@luau/global/ipairs/param/0": {
     "documentation": "A table whose elements are to be iterated over."
@@ -2937,7 +2937,7 @@
       "@luau/global/ipairs/return/1",
       "@luau/global/ipairs/return/2"
     ],
-    "code_sample": ""
+    "code_sample": "local t = {\"apple\", \"banana\"}\nfor i, v in ipairs(t) do\n    print(i, v)\nend"
   },
   "@luau/global/loadstring/param/0": {
     "documentation": "The specified string to be loaded as Lua code."
@@ -3012,7 +3012,7 @@
       "@luau/global/next/return/0",
       "@luau/global/next/return/1"
     ],
-    "code_sample": ""
+    "code_sample": "local t = {x = 10}\nlocal k, v = next(t)\nprint(k, v)"
   },
   "@luau/global/pairs/param/0": {
     "documentation": "An array or dictionary table to iterate over."
@@ -3035,7 +3035,7 @@
       "@luau/global/pairs/return/0",
       "@luau/global/pairs/return/1"
     ],
-    "code_sample": ""
+    "code_sample": "local t = {a = 1, b = 2}\nfor k, v in pairs(t) do\n    print(k, v)\nend"
   },
   "@luau/global/pcall/param/0": {
     "documentation": "The function to be called in protected mode."
@@ -3065,7 +3065,7 @@
       "@luau/global/pcall/return/0",
       "@luau/global/pcall/return/1"
     ],
-    "code_sample": ""
+    "code_sample": "local success, result = pcall(function()\n    return 10 / 2\nend)\nif success then print(result) end"
   },
   "@luau/global/print/param/0": {
     "documentation": "Any number of arguments to be outputted."
@@ -3079,7 +3079,7 @@
       }
     ],
     "returns": [],
-    "code_sample": ""
+    "code_sample": "local msg = \"Hello Luau!\"\nprint(msg)"
   },
   "@luau/global/rawequal/param/0": {
     "documentation": "The first variable to compare."
@@ -3131,7 +3131,7 @@
     "returns": [
       "@luau/global/rawget/return/0"
     ],
-    "code_sample": ""
+    "code_sample": "local t = {a = 10}\nprint(rawget(t, \"a\"))"
   },
   "@luau/global/rawlen/param/0": {
     "documentation": "The table to be referenced."
@@ -3183,7 +3183,7 @@
     "returns": [
       "@luau/global/rawset/return/0"
     ],
-    "code_sample": ""
+    "code_sample": "local t = {}\nrawset(t, \"a\", 50)\nprint(t.a)"
   },
   "@luau/global/select/param/0": {
     "documentation": "The index of the argument to return all arguments after in <code>args</code>. or must be \"#\"."
@@ -3209,7 +3209,7 @@
     "returns": [
       "@luau/global/select/return/0"
     ],
-    "code_sample": ""
+    "code_sample": "local count = select(\"#\", \"a\", \"b\", \"c\")\nprint(count) -- 3"
   },
   "@luau/global/setfenv/param/0": {
     "documentation": "Either a function or a number that specifies the function at that stack level."
@@ -3261,7 +3261,7 @@
     "returns": [
       "@luau/global/setmetatable/return/0"
     ],
-    "code_sample": ""
+    "code_sample": "local t = {}\nlocal mt = {__index = {val = 100}}\nsetmetatable(t, mt)\nprint(t.val)"
   },
   "@luau/global/tonumber/param/0": {
     "documentation": "The object to be converted into a number."
@@ -3287,7 +3287,7 @@
     "returns": [
       "@luau/global/tonumber/return/0"
     ],
-    "code_sample": ""
+    "code_sample": "local text = \"123.45\"\nlocal num = tonumber(text)\nprint(num)"
   },
   "@luau/global/tostring/param/0": {
     "documentation": "The object to be converted into a string."
@@ -3306,7 +3306,7 @@
     "returns": [
       "@luau/global/tostring/return/0"
     ],
-    "code_sample": ""
+    "code_sample": "local num = 456\nlocal str = tostring(num)\nprint(str)"
   },
   "@luau/global/type/param/0": {
     "documentation": "The object to return the type of."
@@ -3325,7 +3325,7 @@
     "returns": [
       "@luau/global/type/return/0"
     ],
-    "code_sample": ""
+    "code_sample": "local var = \"Luau\"\nprint(type(var)) -- string"
   },
   "@luau/global/unpack/param/0": {
     "documentation": "The list of elements to be unpacked."
@@ -3395,6 +3395,6 @@
       "@luau/global/xpcall/return/0",
       "@luau/global/xpcall/return/1"
     ],
-    "code_sample": ""
+    "code_sample": "xpcall(function()\n    error(\"failure\")\nend, function(err)\n    print(\"Caught error:\", err)\nend)"
   }
 }
