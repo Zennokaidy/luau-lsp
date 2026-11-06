@@ -142,3 +142,26 @@ cmake --build . --target Luau.LanguageServer.CLI --config Release
 You can build `Luau.LanguageServer.Test` for unit tests.
 Some tests make assumptions about relative file paths.
 When running tests, ensure that your current working directory is set to the root of the repository.
+
+## WebAssembly / Browser Support
+
+If you want to run `luau-lsp` natively inside web pages, web workers, or browser environments like the Monaco Editor without an external Node.js backend, you can use the community-maintained WASM package:
+
+- **npm Package:** [`luau-lsp-wasm`](https://npmjs.com)
+- **GitHub Repository:** [`Zennokaidy/luau-lsp`](https://github.com)
+- **Live Demo Playground:** [Play Luau LSP](zennokaidy.github.io/luau-lsp/)
+
+### Quick Start (via CDN)
+
+The compiled `.wasm` and `.js` files, along with the definition/documentation files, are available in the `wasm/` folder of this repository.
+
+You can load them directly in your web project using a CDN like `raw.githack`:
+
+```javascript
+// Example of how to fetch the files in your Web Worker
+const wasmUrl = "https://raw.githack.com/Zennokaidy/luau-lsp/main/wasm/Luau.LanguageServer.Web.wasm";
+const jsUrl = "https://raw.githack.com/Zennokaidy/luau-lsp/main/wasm/Luau.LanguageServer.Web.js";
+
+// Definitions and Documentation (also in the wasm/ folder)
+const definitionsUrl = "https://raw.githack.com/Zennokaidy/luau-lsp/main/wasm/demo.defs.luau";
+const docsUrl = "https://raw.githack.com/Zennokaidy/luau-lsp/main/wasm/demo.docs.json";
