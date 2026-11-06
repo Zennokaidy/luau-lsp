@@ -240,13 +240,34 @@ target_link_libraries(Luau.LanguageServer.Test PRIVATE Luau.Ast Luau.Analysis Lu
 
 if (EMSCRIPTEN)
     add_executable(Luau.LanguageServer.Web)
-    target_sources(Luau.LanguageServer.Web PRIVATE
-        src/wasm.cpp
-    )
+    target_sources(Luau.LanguageServer.Web PRIVATE src/wasm.cpp)
     set_target_properties(Luau.LanguageServer.Web PROPERTIES SUFFIX ".js")
     target_compile_features(Luau.LanguageServer.Web PRIVATE cxx_std_17)
     target_compile_options(Luau.LanguageServer.Web PRIVATE -Wall)
-    target_link_libraries(Luau.LanguageServer.Web PRIVATE Luau.LanguageServer)
+    
+    target_include_directories(Luau.LanguageServer.Web PRIVATE 
+        src/include
+        luau/Common/include
+        luau/Ast/include
+        luau/Analysis/include
+        luau/Compiler/include
+        luau/VM/include
+        luau/CodeGen/include
+        luau/Config/include
+        ${EXTERN_INCLUDES}
+    )
+    
+    target_link_libraries(Luau.LanguageServer.Web PRIVATE 
+        Luau.LanguageServer
+        Luau.Ast
+        Luau.Analysis
+        Luau.Compiler
+        Luau.VM
+        Luau.CodeGen
+        Luau.Config
+        Luau.Common
+    )
+    
     target_link_options(Luau.LanguageServer.Web PRIVATE
         -sDEFAULT_LIBRARY_FUNCS_TO_INCLUDE=$dynCall
         -sENVIRONMENT=web
