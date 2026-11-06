@@ -11,7 +11,10 @@
 #include "LSP/Client.hpp"
 #include "LSP/Workspace.hpp"
 
+// <-- MUDANÇA AQUI (Bloco 1: Esconder o Thread.hpp no WASM)
+#ifndef __EMSCRIPTEN__
 #include "Thread.hpp"
+#endif
 
 using json = nlohmann::json;
 using namespace json_rpc;
@@ -66,6 +69,11 @@ public:
     // Visible for testing only
     void shutdown();
 
+    // <-- MUDANÇA AQUI (Bloco 2: Declarar a processMessage)
+#ifdef __EMSCRIPTEN__
+    void processMessage(const std::string& jsonString);
+#endif
+
     // Dispatch handlers
 private:
     bool allWorkspacesReceivedConfiguration() const;
@@ -97,6 +105,11 @@ private:
     std::mutex messagesMutex;
     std::condition_variable messagesCv;
     std::queue<json_rpc::JsonRpcMessage> messages;
+    
+    // <-- MUDANÇA AQUI (Bloco 3: Esconder a variável de Thread no WASM)
+#ifndef __EMSCRIPTEN__
     Thread messageProcessorThread;
+#endif
+
     std::unordered_map<id_type, LSPCancellationToken> cancellationTokens;
 };
