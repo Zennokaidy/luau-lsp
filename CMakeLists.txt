@@ -21,6 +21,16 @@ endif ()
 
 project(Luau.LanguageServer LANGUAGES CXX)
 
+# --- INÍCIO WASM: Configuração global ---
+if (EMSCRIPTEN)
+    set(LSP_WERROR OFF)
+    set(LSP_BUILD_WITH_SENTRY OFF)
+    set(LSP_BUILD_ASAN OFF)
+    add_compile_options(-fexceptions)
+    add_link_options(-fexceptions -sDISABLE_EXCEPTION_CATCHING=0 -sSUPPORT_LONGJMP=emscripten)
+endif()
+# --- FIM WASM ---
+
 # Sentry setup
 if (LSP_BUILD_WITH_SENTRY)
     include(FetchContent)
@@ -105,6 +115,14 @@ target_sources(Luau.LanguageServer PRIVATE
         src/Plugin/PluginDefinitions.cpp
         extern/glob/match.cpp
 )
+
+# --- INÍCIO WASM: Remover arquivos que usam threads/SO ---
+if (EMSCRIPTEN)
+    get_target_property(LS_SOURCES Luau.LanguageServer SOURCES)
+    list(FILTER LS_SOURCES EXCLUDE REGEX ".*/(Thread|PipeTransport|StdioTransport)\\.cpp$")
+    set_target_properties(Luau.LanguageServer PROPERTIES SOURCES "${LS_SOURCES}")
+endif()
+# --- FIM WASM ---
 
 target_sources(Luau.LanguageServer.CLI PRIVATE
         src/main.cpp
@@ -216,6 +234,38 @@ target_compile_options(Luau.LanguageServer.Test PRIVATE ${LUAU_LSP_OPTIONS})
 target_include_directories(Luau.LanguageServer.Test PRIVATE tests)
 target_include_directories(Luau.LanguageServer.Test SYSTEM PRIVATE ${EXTERN_INCLUDES} extern/doctest)
 target_link_libraries(Luau.LanguageServer.Test PRIVATE Luau.Ast Luau.Analysis Luau.LanguageServer)
+
+if (EMSCRIPTEN)
+    add_executable(Luau.LanguageServer.Web)
+    target_sources(Luau.LanguageServer.Web PRIVATE src/wasm.cpp)
+    set_target_properties(Luau.LanguageServer.Web PROPERTIES SUFFIX ".js")
+    target_compile_features(Luau.LanguageServer.Web PRIVATE cxx_std_17)
+    target_compile_options(Luau.LanguageServer.Web PRIVATE -Wall)
+    
+    target_link_libraries(Luau.LanguageServer.Web PRIVATE 
+        Luau.LanguageServer
+        Luau.Ast
+        Luau.Analysis
+        Luau.Compiler
+        Luau.VM
+        Luau.CodeGen
+        Luau.Config
+        Luau.Common
+    )
+    
+    target_link_options(Luau.LanguageServer.Web PRIVATE
+        -sDEFAULT_LIBRARY_FUNCS_TO_INCLUDE=$dynCall
+        -sENVIRONMENT=web
+        -sMODULARIZE=1 -sEXPORT_NAME=LuauLanguageServerWeb -sEXPORT_ES6=1
+        --bind --no-entry
+        -sIGNORE_MISSING_MAIN=1
+        -sALLOW_MEMORY_GROWTH=1
+        -sEXPORTED_RUNTIME_METHODS=FS
+        -sDISABLE_EXCEPTION_CATCHING=0
+        -sSUPPORT_LONGJMP=emscripten
+        -sSTACK_SIZE=5MB
+    )
+endif()
 
 if (LSP_BUILD_WITH_SENTRY)
     target_link_libraries(Luau.LanguageServer PRIVATE sentry)
