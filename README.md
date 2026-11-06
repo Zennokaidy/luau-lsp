@@ -148,15 +148,15 @@ When running tests, ensure that your current working directory is set to the roo
 
 ## WebAssembly / Browser Support
 
-If you want to run `luau-lsp` natively inside web pages, web workers, or browser environments like the Monaco Editor without an external Node.js backend, you can use the community-maintained WASM package:
+If you want to run `luau-lsp` natively inside web pages, web workers, or browser environments like the Monaco Editor without an external Node.js backend, you can use this community-maintained WASM build:
 
-- **npm Package:** [`luau-lsp-wasm`](https://npmjs.com)
-- **GitHub Repository:** [`Zennokaidy/luau-lsp`](https://github.com)
-- **Live Demo Playground:** [Play Luau LSP](zennokaidy.github.io/luau-lsp/)
+- **NPM Package:** [`luau-lsp-wasm`](https://www.npmjs.com/package/luau-lsp-wasm)
+- **GitHub Repository:** [`Zennokaidy/luau-lsp`](https://github.com/Zennokaidy/luau-lsp)
+- **Live Demo Playground:** [Play Luau LSP](https://zennokaidy.github.io/play-luau-lsp/)
 
 ### Quick Start (via CDN)
 
-The compiled `.wasm` and `.js` files, along with the definition/documentation files, are available in the `wasm/` folder of this repository.
+The compiled `.wasm` and `.js` files, along with the standard Luau definition/documentation files, are available in the `wasm/` folder of this repository.
 
 You can load them directly in your web project using a CDN like `raw.githack`:
 
@@ -165,6 +165,7 @@ You can load them directly in your web project using a CDN like `raw.githack`:
 const wasmUrl = "https://raw.githack.com/Zennokaidy/luau-lsp/main/wasm/Luau.LanguageServer.Web.wasm";
 const jsUrl = "https://raw.githack.com/Zennokaidy/luau-lsp/main/wasm/Luau.LanguageServer.Web.js";
 
-// Definitions and Documentation (also in the wasm/ folder)
-const definitionsUrl = "https://raw.githack.com/Zennokaidy/luau-lsp/main/wasm/demo.defs.luau";
-const docsUrl = "https://raw.githack.com/Zennokaidy/luau-lsp/main/wasm/demo.docs.json";
+// Standard Luau Definitions and Documentation (also in the wasm/ folder)
+const definitionsUrl = "https://raw.githack.com/Zennokaidy/luau-lsp/main/wasm/globalTypes.None.d.luau";
+const docsUrl = "https://raw.githack.com/Zennokaidy/luau-lsp/main/wasm/en-us.json";
+```
