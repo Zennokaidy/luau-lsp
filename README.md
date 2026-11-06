@@ -2,6 +2,9 @@
 
 An implementation of a language server for the [Luau](https://github.com/Roblox/luau) programming language.
 
+> **⚠️ AI Usage Disclosure:** 
+> This repository is a community-maintained fork adapted to compile `luau-lsp` to WebAssembly (WASM) for web browsers. Parts of the WASM adaptation (C++ bridging and CMake modifications) were generated with the assistance of AI (DeepSeek). Please review the code carefully before using it in a production environment.
+
 ## Getting Started
 
 Install the extension from the VSCode Marketplace or OpenVSX Registry:
