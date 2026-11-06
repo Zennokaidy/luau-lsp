@@ -32,12 +32,14 @@ LanguageServer::LanguageServer(LSPClient* aClient, std::optional<Luau::Config> a
     , defaultConfig(std::move(aDefaultConfig))
     , nullWorkspace(std::make_shared<WorkspaceFolder>(client, "$NULL_WORKSPACE", Uri(), defaultConfig))
 {
+#ifndef __EMSCRIPTEN__
     messageProcessorThread = Thread(
         [this]
         {
             while (auto message = popMessage())
                 handleMessage(*message);
         });
+#endif
 }
 
 /// Finds the workspace which the file belongs to.
@@ -949,5 +951,53 @@ void LanguageServer::shutdown()
     }
 
     messagesCv.notify_all();
+#ifndef __EMSCRIPTEN__
     messageProcessorThread.join();
+#endif
 }
+
+#ifdef __EMSCRIPTEN__
+void LanguageServer::processMessage(const std::string& jsonString)
+{
+    std::optional<id_type> id = std::nullopt;
+    try
+    {
+        auto msg = json_rpc::parse(jsonString);
+        id = msg.id;
+
+        if (msg.is_request() && msg.method == "shutdown")
+        {
+            shutdown();
+            client->sendResponse(*id, {});
+            return;
+        }
+        if (msg.is_notification() && msg.method == "exit")
+        {
+            return;
+        }
+        if (msg.is_notification() && msg.method == "$/cancelRequest")
+        {
+            if (msg.params)
+            {
+                auto params = msg.params->get<lsp::CancelParams>();
+                std::unique_lock guard(messagesMutex);
+                if (const auto& it = cancellationTokens.find(params.id); it != cancellationTokens.end())
+                    it->second->cancel();
+            }
+            return;
+        }
+
+        if (msg.is_request())
+        {
+            std::unique_lock guard(messagesMutex);
+            cancellationTokens[*msg.id] = std::make_shared<Luau::FrontendCancellationToken>();
+        }
+
+        handleMessage(msg);
+    }
+    catch (const json::exception& e)
+    {
+        client->sendError(id, JsonRpcException(lsp::ErrorCode::ParseError, e.what()));
+    }
+}
+#endif
